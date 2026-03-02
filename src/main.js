@@ -79,6 +79,7 @@ if (!app.requestSingleInstanceLock()) {
             appIcon,
             mainWindow,
             nextMusicDirectory,
+            addonsDirectory,
             configFilePath,
             config,
         );

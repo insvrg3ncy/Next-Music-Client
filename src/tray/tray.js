@@ -18,7 +18,13 @@ const trayIcon = nativeImage
     .createFromPath(trayIconPath)
     .resize({ width: 24, height: 24 });
 
-function createTray(iconPath, mainWindow, nextMusicDirectory, configFilePath) {
+function createTray(
+    iconPath,
+    mainWindow,
+    nextMusicDirectory,
+    addonsDirectory,
+    configFilePath,
+) {
     const tray = new Tray(trayIcon);
 
     const contextMenu = Menu.buildFromTemplate([
@@ -31,21 +37,26 @@ function createTray(iconPath, mainWindow, nextMusicDirectory, configFilePath) {
             label: "Open Next Music folder",
             click: () => {
                 if (!nextMusicDirectory) {
-                    console.error("nextMusicDirectory is undefined");
                     return;
                 }
-
                 shell.openPath(nextMusicDirectory);
+            },
+        },
+        {
+            label: "Open addons folder",
+            click: () => {
+                if (!addonsDirectory) {
+                    return;
+                }
+                shell.openPath(addonsDirectory);
             },
         },
         {
             label: "Open config",
             click: () => {
                 if (!configFilePath) {
-                    console.error("configFilePath is undefined");
                     return;
                 }
-
                 shell.openPath(configFilePath);
             },
         },
