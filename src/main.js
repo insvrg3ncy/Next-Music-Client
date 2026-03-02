@@ -1,23 +1,9 @@
-const {
-    app,
-    BrowserWindow,
-    session,
-    nativeTheme,
-    ipcMain,
-} = require("electron");
+const { app, BrowserWindow, session, nativeTheme } = require("electron");
 const path = require("path");
 const http = require("http");
 const fs = require("fs");
+const setupIpcEvents = require("./events");
 let { config, injectList } = require("./config.js");
-
-// Titlebar
-ipcMain.on("nmc-minimize", () => mainWindow.minimize());
-ipcMain.on("nmc-maximize", () => {
-    if (mainWindow.isMaximized()) mainWindow.unmaximize();
-    else mainWindow.maximize();
-});
-ipcMain.on("nmc-close", () => mainWindow.hide());
-ipcMain.handle("nmc-is-maximized", () => mainWindow.isMaximized());
 
 // Иконка
 const appIcon = path.join(__dirname, "assets/icon-256.png");
@@ -55,48 +41,53 @@ app.on(
     },
 );
 
+// Prevent multiple app instances
 if (!app.requestSingleInstanceLock()) {
-    // Если есть уже запущенный экземпляр, выходим
     app.quit();
-} else {
-    app.on("second-instance", () => {
-        // Это событие вызывается, когда кто-то пытается открыть вторую копию
-        if (mainWindow) {
-            if (mainWindow.isMinimized()) mainWindow.restore();
-            mainWindow.show();
-            mainWindow.focus();
-        }
-    });
-
-    app.whenReady().then(() => {
-        config = loadConfig(nextMusicDirectory, config);
-        if (config.programSettings.checkUpdates) {
-            checkForUpdates();
-        }
-        mainWindow = createWindow();
-        presenceService(config);
-        createTray(
-            appIcon,
-            mainWindow,
-            nextMusicDirectory,
-            addonsDirectory,
-            configFilePath,
-            config,
-        );
-        if (config.programSettings.obsWidget) {
-            obsWidgetService.startServer({
-                port: 4091,
-            });
-        }
-        app.on("activate", () => {
-            if (BrowserWindow.getAllWindows().length === 0) createWindow();
-        });
-    });
-
-    app.on("window-all-closed", () => {
-        if (process.platform !== "darwin") app.quit();
-    });
+    return;
 }
+
+app.on("second-instance", () => {
+    if (!mainWindow) return;
+
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+});
+
+// Quit the app when all windows are closed (except on macOS)
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+});
+
+// Re-create the window on dock/taskbar click if no windows are open
+app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+
+// Initialize app services
+app.whenReady().then(() => {
+    config = loadConfig(nextMusicDirectory, config);
+
+    if (config.programSettings.checkUpdates) checkForUpdates();
+
+    mainWindow = createWindow();
+    setupIpcEvents(mainWindow);
+
+    presenceService(config);
+    createTray(
+        appIcon,
+        mainWindow,
+        nextMusicDirectory,
+        addonsDirectory,
+        configFilePath,
+        config,
+    );
+
+    if (config.programSettings.obsWidget) {
+        obsWidgetService.startServer({ port: 4091 });
+    }
+});
 
 function createLoaderWindow() {
     loaderWindow = new BrowserWindow({
@@ -118,11 +109,15 @@ function createLoaderWindow() {
 
 function createWindow() {
     const showWindow = !config.launchSettings.startMinimized;
+    const titleBarEnabled = config.windowSettings?.titleBar?.enable;
+    const listenAlong = config?.experimental?.listenAlong;
 
+    // Create loader window before main window if needed
     if (config.launchSettings.loaderWindow && showWindow) {
         createLoaderWindow();
     }
 
+    // Main window setup
     mainWindow = new BrowserWindow({
         width: 1280,
         height: 800,
@@ -134,29 +129,51 @@ function createWindow() {
             ? "#0D0D0D"
             : "#E6E6E6",
         icon: appIcon,
-        frame: !config.windowSettings?.titleBar?.enable,
+        frame: !titleBarEnabled,
         roundedCorners: true,
+        show: false,
         webPreferences: {
-            webSecurity: false, // для обхода CORS, но CSP всё равно надо менять
+            webSecurity: false, // Bypass CORS (CSP is also stripped below)
             nodeIntegration: false,
             contextIsolation: true,
-            preload: config.windowSettings?.titleBar?.enable
+            preload: titleBarEnabled
                 ? path.join(__dirname, "preload.js")
                 : undefined,
         },
-        show: false,
     });
 
-    // Убираем CSP для обхода блокировок
-    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-        const headers = details.responseHeaders || {};
-        delete headers["content-security-policy"];
-        delete headers["Content-Security-Policy"];
-        callback({ responseHeaders: headers });
+    setupCSP();
+    setupTitleBarEvents();
+    loadAppURL();
+    setupInputHandlers();
+    setupLoadHandlers();
+    setupInitialVisibility();
+
+    mainWindow.on("close", (event) => {
+        event.preventDefault();
+        mainWindow.hide();
     });
 
-    // Уведомляем рендерер при смене состояния окна
-    if (config.windowSettings?.titleBar?.enable) {
+    return mainWindow;
+
+    // --- Helpers ---
+
+    // Remove CSP headers to avoid content blocking
+    function setupCSP() {
+        session.defaultSession.webRequest.onHeadersReceived(
+            (details, callback) => {
+                const headers = details.responseHeaders || {};
+                delete headers["content-security-policy"];
+                delete headers["Content-Security-Policy"];
+                callback({ responseHeaders: headers });
+            },
+        );
+    }
+
+    // Notify renderer on window maximize/unmaximize
+    function setupTitleBarEvents() {
+        if (!titleBarEnabled) return;
+
         mainWindow.on("maximize", () =>
             mainWindow.webContents.send("nmc-maximized"),
         );
@@ -165,104 +182,111 @@ function createWindow() {
         );
     }
 
-    // Load main app URL
-    const listenAlong = config?.experimental?.listenAlong;
-    if (listenAlong?.enable) {
-        const params = new URLSearchParams({
-            __blackIsland: listenAlong.blackIsland || null,
-            __wss: listenAlong.host
-                ? `${listenAlong.host}:${listenAlong.port || null}`
-                : "",
-            __room: listenAlong.roomId || "",
-            __clientId: listenAlong.clientId || "",
-            __avatarUrl: listenAlong.avatarUrl || "",
-        });
-        mainWindow.loadURL("https://music.yandex.ru/?" + params.toString());
-    } else {
-        mainWindow.loadURL("https://music.yandex.ru/");
+    // Load Yandex Music
+    function loadAppURL() {
+        if (listenAlong?.enable) {
+            const params = new URLSearchParams({
+                __blackIsland: listenAlong.blackIsland || null,
+                __wss: listenAlong.host
+                    ? `${listenAlong.host}:${listenAlong.port || null}`
+                    : "",
+                __room: listenAlong.roomId || "",
+                __clientId: listenAlong.clientId || "",
+                __avatarUrl: listenAlong.avatarUrl || "",
+            });
+            mainWindow.loadURL("https://music.yandex.ru/?" + params.toString());
+        } else {
+            mainWindow.loadURL("https://music.yandex.ru/");
+        }
     }
 
-    // Перехватываем Alt, чтобы меню не всплывало
-    mainWindow.webContents.on("before-input-event", (event, input) => {
-        if (input.key === "Alt") {
-            event.preventDefault();
-        }
-    });
+    // Prevent Alt key from opening the native menu
+    function setupInputHandlers() {
+        mainWindow.webContents.on("before-input-event", (event, input) => {
+            if (input.key === "Alt") event.preventDefault();
+        });
+    }
 
-    mainWindow.webContents.on("did-finish-load", () => {
-        // Inject titlebar
-        if (config.windowSettings?.titleBar?.enable) {
-            const css = fs.readFileSync(
-                path.join(__dirname, "renderer/titlebar/titlebar.css"),
-                "utf-8",
-            );
-            const js = fs.readFileSync(
-                path.join(__dirname, "renderer/titlebar/titlebar.js"),
-                "utf-8",
-            );
-            // Передаём конфиг тайтлбара в рендерер до запуска скрипта
-            const titleBarConfig = {
-                showNextText:
-                    config.windowSettings?.titleBar?.nextText === true,
-                version: app.getVersion(),
-            };
-            mainWindow.webContents
-                .executeJavaScript(
-                    `window.__nmcTitleBarConfig = ${JSON.stringify(titleBarConfig)};`,
-                )
-                .catch(console.error);
-            mainWindow.webContents.insertCSS(css).catch(console.error);
-            mainWindow.webContents.executeJavaScript(js).catch(console.error);
-        }
+    function setupLoadHandlers() {
+        mainWindow.webContents.on("did-finish-load", onFinishLoad);
+        mainWindow.webContents.on("did-fail-load", onFailLoad);
+    }
+
+    function onFinishLoad() {
+        if (titleBarEnabled) injectTitleBar();
 
         injector(mainWindow, config);
 
-        // Inject addons
         if (config.programSettings.addons.enable) {
             applyAddons();
         } else {
             console.log("Addons are disabled");
         }
 
-        // Закрываем loader окно (если оно есть)
-        if (config.launchSettings.loaderWindow && loaderWindow) {
-            try {
-                loaderWindow.close();
-                loaderWindow = null;
-            } catch (err) {
-                console.log("Loader window is missing");
-            }
-        }
+        closeLoaderWindow();
 
-        // Показываем основное окно
-        if (showWindow) {
-            mainWindow.show();
-        }
-    });
-
-    mainWindow.webContents.on(
-        "did-fail-load",
-        (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-            if (isMainFrame) {
-                mainWindow.loadFile(
-                    path.join(__dirname, "renderer/fallback/fallback.html"),
-                );
-            }
-        },
-    );
-
-    if (config.launchSettings.startMinimized) {
-        mainWindow.hide();
-    } else if (!config.launchSettings.loaderWindow) {
-        mainWindow.show();
+        if (showWindow) mainWindow.show();
     }
 
-    mainWindow.on("close", (event) => {
-        event.preventDefault();
-        mainWindow.hide();
-    });
+    // Inject custom titlebar CSS and JS into the renderer
+    function injectTitleBar() {
+        const css = fs.readFileSync(
+            path.join(__dirname, "renderer/titlebar/titlebar.css"),
+            "utf-8",
+        );
+        const js = fs.readFileSync(
+            path.join(__dirname, "renderer/titlebar/titlebar.js"),
+            "utf-8",
+        );
 
-    return mainWindow;
+        const titleBarConfig = {
+            showNextText: config.windowSettings?.titleBar?.nextText === true,
+            version: app.getVersion(),
+        };
+
+        mainWindow.webContents
+            .executeJavaScript(
+                `window.__nmcTitleBarConfig = ${JSON.stringify(titleBarConfig)};`,
+            )
+            .catch(console.error);
+
+        mainWindow.webContents.insertCSS(css).catch(console.error);
+        mainWindow.webContents.executeJavaScript(js).catch(console.error);
+    }
+
+    function closeLoaderWindow() {
+        if (!config.launchSettings.loaderWindow || !loaderWindow) return;
+
+        try {
+            loaderWindow.close();
+            loaderWindow = null;
+        } catch {
+            console.log("Loader window is missing");
+        }
+    }
+
+    // Load fallback page if the main frame fails to load
+    function onFailLoad(
+        event,
+        errorCode,
+        errorDescription,
+        validatedURL,
+        isMainFrame,
+    ) {
+        if (isMainFrame) {
+            mainWindow.loadFile(
+                path.join(__dirname, "renderer/fallback/fallback.html"),
+            );
+        }
+    }
+
+    function setupInitialVisibility() {
+        if (config.launchSettings.startMinimized) {
+            mainWindow.hide();
+        } else if (!config.launchSettings.loaderWindow) {
+            mainWindow.show();
+        }
+    }
 }
 
 function normalizeConfig(defaultConfig, savedConfig) {
