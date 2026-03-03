@@ -4,6 +4,7 @@
     const WS_URL = "ws://localhost:4091";
     let ws = null;
     let lastPayload = "";
+    let observing = false;
 
     function log(...args) {
         console.log("[YM-OBSERVER]", ...args);
@@ -87,6 +88,8 @@
     }
 
     function waitForPlayerAndObserve() {
+        if (observing) return;
+
         const root = qs('[class*="PlayerBar_root"]');
         if (!root) {
             setTimeout(waitForPlayerAndObserve, 500);
@@ -94,6 +97,7 @@
         }
 
         log("PlayerBar found, observing…");
+        observing = true;
 
         const observer = new MutationObserver(() => {
             collectAndSend();
@@ -106,7 +110,22 @@
             attributes: true,
         });
 
-        // первый пуш сразу
+        // Сбрасываем флаг если PlayerBar исчез
+        const disconnectObserver = new MutationObserver(() => {
+            if (!document.contains(root)) {
+                log("PlayerBar removed from DOM");
+                observer.disconnect();
+                disconnectObserver.disconnect();
+                observing = false;
+                waitForPlayerAndObserve();
+            }
+        });
+
+        disconnectObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+
         collectAndSend();
     }
 

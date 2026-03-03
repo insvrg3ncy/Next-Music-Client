@@ -1,7 +1,6 @@
-const https = require("https");
 const { app, dialog, shell } = require("electron");
-
-const { version: CURRENT_VERSION } = require("../../../package.json");
+const { version: CURRENT_VERSION } = require("../../package.json");
+const https = require("https");
 
 const GITHUB_API_URL =
     "https://api.github.com/repos/Web-Next-Music/Next-Music-Client/releases/latest";

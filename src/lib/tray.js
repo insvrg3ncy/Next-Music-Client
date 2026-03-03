@@ -6,13 +6,13 @@ const {
     nativeImage,
     app,
 } = require("electron");
-const path = require("path");
-const { checkForUpdates } = require("../services/updater/updater");
+const { checkForUpdates } = require("../lib/updater");
 const { version: CURRENT_VERSION } = require("../../package.json");
+const { trayIconPath } = require("../config.js");
+const path = require("path");
 
 let infoWindow = null;
 const infoPath = path.join(__dirname, "../renderer/info/info.html");
-const trayIconPath = path.join(__dirname, "../assets/nm-tray.png");
 
 const trayIcon = nativeImage
     .createFromPath(trayIconPath)
@@ -35,29 +35,43 @@ function createTray(
         { type: "separator" },
         {
             label: "Open Next Music folder",
-            click: () => {
+            click: async () => {
                 if (!nextMusicDirectory) {
+                    console.error("nextMusicDirectory is not defined");
                     return;
                 }
-                shell.openPath(nextMusicDirectory);
+                const result = await shell.openPath(
+                    path.normalize(nextMusicDirectory),
+                );
+                if (result) {
+                    console.error("Failed to open path:", result);
+                }
             },
         },
         {
             label: "Open addons folder",
-            click: () => {
+            click: async () => {
                 if (!addonsDirectory) {
+                    console.error("addonsDirectory is not defined");
                     return;
                 }
-                shell.openPath(addonsDirectory);
+                const result = await shell.openPath(
+                    path.normalize(addonsDirectory),
+                );
+                if (result) console.error("Failed to open path:", result);
             },
         },
         {
             label: "Open config",
-            click: () => {
+            click: async () => {
                 if (!configFilePath) {
+                    console.error("configFilePath is not defined");
                     return;
                 }
-                shell.openPath(configFilePath);
+                const result = await shell.openPath(
+                    path.normalize(configFilePath),
+                );
+                if (result) console.error("Failed to open path:", result);
             },
         },
         { type: "separator" },

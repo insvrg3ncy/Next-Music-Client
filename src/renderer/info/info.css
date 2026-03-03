@@ -65,7 +65,7 @@ body {
 
 .linkBtn {
     background-color: #0008;
-    border-radius: 5px;
+    border-radius: 12px;
     border-width: 0;
     width: 50%;
     height: 50%;
@@ -73,6 +73,7 @@ body {
     font-size: 17px;
     font-weight: 600;
     flex: 1 1 calc(50% - 10px);
+    transition: background-color ease 0.25s;
 }
 
 .linkBtn:hover {

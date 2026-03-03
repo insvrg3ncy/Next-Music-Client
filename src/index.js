@@ -1,0 +1,97 @@
+const { app, BrowserWindow } = require("electron");
+
+// Config
+const { loadConfig } = require("./config");
+const { appIcon, getPaths } = require("./config.js");
+const { nextMusicDirectory, addonsDirectory, configFilePath } = getPaths();
+
+// Services
+const { createTray } = require("./lib/tray.js");
+const { checkForUpdates } = require("./lib/updater.js");
+const { presenceService } = require("./lib/richPresence.js");
+const { createWindow } = require("./lib/window/mainWindow/createWindow.js");
+const obsWidgetService = require("./lib/obsWidget/obsWidget.js");
+
+// IPC
+const setupIpcEvents = require("./events");
+
+// Flags & Fixes
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
+
+// Fix color rendering on Linux (Wayland issue)
+if (process.platform === "linux") {
+    app.commandLine.appendSwitch("disable-features", "WaylandWpColorManagerV1");
+}
+
+// Normalize color profile across platforms
+app.commandLine.appendSwitch("force-color-profile", "srgb");
+
+// Allow self-signed/spoofed certificates
+app.on(
+    "certificate-error",
+    (event, _webContents, _url, _error, _cert, callback) => {
+        event.preventDefault();
+        callback(true);
+    },
+);
+
+// Single Instance Lock
+const isSingleInstance = app.requestSingleInstanceLock();
+
+if (!isSingleInstance) {
+    app.quit();
+    return;
+}
+
+// When a second instance is launched, focus the existing window instead
+app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+});
+
+// Window Lifecycle
+let mainWindow;
+
+// Quit app when all windows are closed (except on macOS)
+app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+});
+
+// Re-create window on dock/taskbar click if no windows exist
+app.on("activate", () => {
+    const hasNoWindows = BrowserWindow.getAllWindows().length === 0;
+    if (hasNoWindows) {
+        mainWindow = createWindow();
+    }
+});
+
+// App Initialization
+app.whenReady().then(() => {
+    const config = loadConfig();
+
+    mainWindow = createWindow(config);
+    setupIpcEvents(mainWindow);
+
+    createTray(
+        appIcon,
+        mainWindow,
+        nextMusicDirectory,
+        addonsDirectory,
+        configFilePath,
+        config,
+    );
+
+    if (config.programSettings?.checkUpdates) {
+        checkForUpdates();
+    }
+
+    if (config?.programSettings?.obsWidget) {
+        obsWidgetService.startServer({ port: 4091 });
+    }
+
+    if (config?.programSettings?.richPresence?.enabled) {
+        presenceService(config);
+    }
+});

@@ -1,8 +1,6 @@
 "use strict";
-
 const { Client } = require("@xhayper/discord-rpc");
 const WebSocket = require("ws");
-const config = require("../../main.js");
 
 const CLIENT_ID = "1300258490815741952";
 const GITHUB_LINK = `https://github.com/Web-Next-Music/Next-Music-Client`;
@@ -12,6 +10,7 @@ let rpc;
 let isReady = false;
 let lastActivity;
 let lastPlayerState = null;
+let globalConfig = null;
 
 // --- Initialize RPC ---
 function initRPC() {
@@ -46,7 +45,7 @@ wss.on("connection", (ws) => {
     ws.on("message", (msg) => {
         try {
             const data = JSON.parse(msg.toString());
-            updateActivity(data);
+            updateActivity(data, globalConfig);
         } catch (e) {
             console.error("[WS] ❌ Error parsing data:", e);
         }
@@ -65,7 +64,7 @@ function parseTime(timeString) {
 }
 
 // --- Update Discord activity ---
-function updateActivity(data) {
+function updateActivity(data, config) {
     if (!rpc || !isReady) return;
 
     const title = data.title || "";
@@ -81,7 +80,7 @@ function updateActivity(data) {
     const endTimestamp = startTimestamp + total;
 
     const activityObject = {
-        name: config.programSettings.richPresence.rpcTitle,
+        name: config?.programSettings?.richPresence?.rpcTitle || "Next Music",
         type: 2,
         details: title,
         state: artist,
@@ -93,45 +92,25 @@ function updateActivity(data) {
         ...(artistUrl ? { stateUrl: artistUrl } : {}),
         ...((data.timeCurrent && data.timeCurrent !== "00:00") ||
         (data.timeEnd && data.timeEnd !== "00:00")
-            ? {
-                  startTimestamp:
-                      Math.floor(Date.now() / 1000) -
-                      parseTime(data.timeCurrent),
-                  endTimestamp:
-                      Math.floor(Date.now() / 1000) -
-                      parseTime(data.timeCurrent) +
-                      parseTime(data.timeEnd),
-              }
+            ? { startTimestamp, endTimestamp }
             : {}),
         buttons: [
-            ...(config.programSettings.richPresence.buttons.trackButton &&
+            ...(config?.programSettings?.richPresence?.buttons?.trackButton &&
             albumUrl
-                ? [
-                      {
-                          label: "Open in Yandex Music",
-                          url: albumUrl,
-                      },
-                  ]
+                ? [{ label: "Open in Yandex Music", url: albumUrl }]
                 : []),
-            ...(config.programSettings.richPresence.buttons.githubButton
-                ? [
-                      {
-                          label: "Next Music Project",
-                          url: GITHUB_LINK,
-                      },
-                  ]
+            ...(config?.programSettings?.richPresence?.buttons?.githubButton
+                ? [{ label: "Next Music Project", url: GITHUB_LINK }]
                 : []),
         ],
     };
 
-    // Сбрасываем lastActivity, если трек не даёт таймстампы
     if (!activityObject.startTimestamp || !activityObject.endTimestamp) {
         lastActivity = null;
     }
 
     const playerState = data.playerState?.toLowerCase() || "";
 
-    // --- Если в паузе, очищаем активность сразу ---
     if (playerState.includes("play")) {
         console.log(`[RPC] ⏸ Clearing activity (pause)`);
         rpc.user?.clearActivity().catch(console.error);
@@ -139,7 +118,6 @@ function updateActivity(data) {
         return;
     }
 
-    // --- Если идёт трек ---
     if (playerState.includes("pause") || playerState.includes("playing")) {
         const hasChanged =
             !lastActivity ||
@@ -148,7 +126,6 @@ function updateActivity(data) {
             lastActivity.largeImageKey !== activityObject.largeImageKey ||
             lastPlayerState !== "play";
 
-        // Проверка для обновления только таймстампов
         const timestampDiff = lastActivity
             ? Math.abs(
                   activityObject.startTimestamp - lastActivity.startTimestamp,
@@ -156,25 +133,27 @@ function updateActivity(data) {
             : Infinity;
 
         if (hasChanged) {
-            console.log(
-                `[RPC] 🎧 Setting new activity: ${title} — ${artist}`,
-                activityObject,
-            );
+            console.log(`[RPC] 🎧 Setting new activity: ${title} — ${artist}`);
             rpc.user?.setActivity(activityObject).catch(console.error);
             lastActivity = activityObject;
             lastPlayerState = "play";
         } else if (timestampDiff > 1) {
             console.log(
                 `[RPC] 🔄 Updating timestamps for: ${title} — ${artist}`,
-                { startTimestamp, endTimestamp },
             );
             rpc.user
                 ?.setActivity({ ...lastActivity, startTimestamp, endTimestamp })
                 .catch(console.error);
-            lastActivity.startTimestamp = startTimestamp; // обновляем последний таймстамп
+            lastActivity.startTimestamp = startTimestamp;
             lastActivity.endTimestamp = endTimestamp;
         }
     }
 }
 
-module.exports = { initRPC };
+// --- Initialize Discord RPC if enabled ---
+function presenceService(config) {
+    globalConfig = config;
+    initRPC();
+}
+
+module.exports = { initRPC, updateActivity, presenceService };

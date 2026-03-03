@@ -1,3 +1,10 @@
+@font-face {
+    font-family: "YS Text Local";
+    src: url("fonts/YSText-Regular.woff2") format("woff2");
+    font-weight: normal;
+    font-style: normal;
+}
+
 .TitleBar_root {
     --nm-spacer-size-xxxl: var(--ym-spacer-size-xxxl);
     --nm-line-height: var(--ym-font-line-height-label-s);
@@ -32,7 +39,7 @@
 
 .TitleBar_root .TitleBar_nextText {
     color: var(--next-text-color);
-    font-family: "YS Text", sans-serif;
+    font-family: "YS Text Local", sans-serif;
     font-weight: 500;
     line-height: var(--nm-line-height);
     margin-right: 20px;
