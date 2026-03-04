@@ -14,7 +14,7 @@ body {
     position: fixed;
     width: 100px;
     height: 100px;
-    background-image: url("../../assets/icon-256.png");
+    background-image: url("../../assets/nm-icons/icon-256.png");
     background-size: cover;
     top: 18%;
     left: calc(50% - 50px);
