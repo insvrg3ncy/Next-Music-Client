@@ -132,14 +132,23 @@ function startAssetServer() {
                 return res.end("Assets folder not found");
             }
 
-            // Рекурсивный поиск файла в assets
+            // Рекурсивный поиск файла в assets (с поддержкой симлинков)
             function findFileRecursive(dir) {
                 const entries = fs.readdirSync(dir, { withFileTypes: true });
                 for (const entry of entries) {
                     const fullPath = path.join(dir, entry.name);
-                    if (entry.isFile() && entry.name === fileName)
+
+                    // Разрешаем симлинки через stat (следует по ссылке)
+                    let stat;
+                    try {
+                        stat = fs.statSync(fullPath);
+                    } catch {
+                        continue; // битая ссылка — пропускаем
+                    }
+
+                    if (stat.isFile() && entry.name === fileName)
                         return fullPath;
-                    if (entry.isDirectory()) {
+                    if (stat.isDirectory()) {
                         const found = findFileRecursive(fullPath);
                         if (found) return found;
                     }
@@ -211,7 +220,7 @@ function startAssetServer() {
     });
 }
 
-// Рекурсивный обход директорий
+// Рекурсивный обход директорий (с поддержкой символических ссылок)
 function loadFilesFromDirectory(directory, extension, callback) {
     fs.readdir(directory, { withFileTypes: true }, (err, entries) => {
         if (err) return;
@@ -219,8 +228,22 @@ function loadFilesFromDirectory(directory, extension, callback) {
         for (const entry of entries) {
             const fullPath = path.join(directory, entry.name);
 
+            // Определяем реальный тип записи — следуем по симлинкам через stat
+            let stat;
+            try {
+                stat = fs.statSync(fullPath); // в отличие от lstat — раскрывает симлинк
+            } catch {
+                console.warn(
+                    `[Addons] Broken symlink or inaccessible: ${fullPath}`,
+                );
+                continue;
+            }
+
+            const isDirectory = stat.isDirectory();
+            const isFile = stat.isFile();
+
             // нашли assets — регистрируем папку аддона по её имени
-            if (entry.isDirectory() && entry.name === "assets") {
+            if (isDirectory && entry.name === "assets") {
                 const addonName = path.basename(directory);
                 if (!ADDON_DIRS.has(addonName)) {
                     ADDON_DIRS.set(addonName, directory);
@@ -231,16 +254,16 @@ function loadFilesFromDirectory(directory, extension, callback) {
                 continue;
             }
 
-            // пропускаем !папки
-            if (entry.isDirectory()) {
+            // пропускаем папки с "!"
+            if (isDirectory) {
                 if (!entry.name.startsWith("!")) {
                     loadFilesFromDirectory(fullPath, extension, callback);
                 }
                 continue;
             }
 
-            // обычные файлы
-            if (path.extname(entry.name) === extension) {
+            // обычные файлы (в т.ч. симлинки на файлы)
+            if (isFile && path.extname(entry.name) === extension) {
                 fs.readFile(fullPath, "utf8", (err, content) => {
                     if (!err) callback(content, fullPath);
                 });
