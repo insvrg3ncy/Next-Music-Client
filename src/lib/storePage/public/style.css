@@ -475,6 +475,38 @@ main {
     height: 15px;
 }
 
+/* Settings button for handleEvents.json */
+.btn-settings {
+    flex: 0 0 32px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    background: rgba(100, 116, 139, 0.08);
+    color: var(--txt2);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+    transition:
+        color 0.2s,
+        background 0.2s,
+        border-color 0.2s,
+        opacity 0.2s,
+        transform 0.15s;
+}
+.btn-settings:hover:not(:disabled) {
+    color: var(--acc);
+    background: var(--acc-dim);
+    border-color: var(--acc-bor);
+}
+.btn-settings:disabled {
+    opacity: 0.28;
+    cursor: not-allowed;
+}
+.btn-settings svg {
+    width: 13px;
+    height: 13px;
+}
+
 .sb {
     display: inline-flex;
     align-items: center;
@@ -535,6 +567,32 @@ main {
     line-height: 2.4;
 }
 
+/* modal */
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--txt);
+    border-radius: 6px;
+    transition:
+        color 0.15s ease,
+        background 0.15s ease;
+}
+.modal-close:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--err);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
 /* README modal */
 .modal-bg {
     position: fixed;
@@ -577,22 +635,6 @@ main {
 .modal-title {
     font-weight: 800;
     font-size: 0.95rem;
-}
-.modal-close {
-    background: none;
-    border: none;
-    color: var(--mut);
-    font-size: 1.2rem;
-    cursor: pointer;
-    padding: 2px 8px;
-    border-radius: 6px;
-    transition:
-        color 0.2s,
-        background 0.2s;
-}
-.modal-close:hover {
-    color: var(--acc);
-    background: var(--acc-dim);
 }
 .modal-body {
     padding: 20px;
@@ -803,4 +845,171 @@ header {
     background: rgba(239, 68, 68, 0.1);
     color: var(--err);
     border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* ── handleEvents.json editor modal ─────────────────────────────────────────── */
+.editor-modal {
+    max-width: 780px;
+    width: 100%;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+}
+.editor-modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+.editor-modal-badge {
+    font-family: "Space Mono", monospace;
+    font-size: 0.54rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: var(--acc-dim);
+    color: var(--acc);
+    border: 1px solid var(--acc-bor);
+}
+.editor-wrap {
+    flex: 1 1 0;
+    min-height: 360px;
+    overflow: hidden;
+    border-bottom: 1px solid var(--bor);
+}
+
+/* CodeMirror fills the host */
+.editor-wrap .CodeMirror {
+    height: 100%;
+    font-family: "Space Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.65;
+    border-radius: 0;
+}
+
+/* ── nm-dark CodeMirror theme ────────────────────────────────────────────────── */
+.cm-s-nm-dark.CodeMirror {
+    background: var(--bg);
+    color: #c9d1d9;
+    caret-color: #2bfef5;
+}
+.cm-s-nm-dark .CodeMirror-gutters {
+    background: var(--sur);
+    border-right: 1px solid var(--bor);
+}
+.cm-s-nm-dark .CodeMirror-linenumber {
+    color: var(--txt2);
+    padding: 0 10px 0 6px;
+}
+.cm-s-nm-dark .CodeMirror-cursor {
+    border-left: 2px solid #2bfef5;
+}
+.cm-s-nm-dark .CodeMirror-selected {
+    background: rgba(43, 254, 245, 0.12) !important;
+}
+.cm-s-nm-dark .CodeMirror-activeline-background {
+    background: rgba(255, 255, 255, 0.03);
+}
+.cm-s-nm-dark .CodeMirror-foldgutter-open,
+.cm-s-nm-dark .CodeMirror-foldgutter-folded {
+    color: #484f58;
+}
+.cm-s-nm-dark .CodeMirror-foldgutter-open:hover,
+.cm-s-nm-dark .CodeMirror-foldgutter-folded:hover {
+    color: #2bfef5;
+}
+.cm-s-nm-dark .CodeMirror-matchingbracket {
+    background: rgba(43, 254, 245, 0.18);
+    color: #2bfef5 !important;
+    outline: none;
+    border-radius: 2px;
+}
+/* JSON syntax colors */
+.cm-s-nm-dark .cm-string {
+    color: var(--txt2);
+}
+.cm-s-nm-dark .cm-number {
+    color: #79c0ff;
+}
+.cm-s-nm-dark .cm-atom {
+    color: #ff7b72;
+}
+.cm-s-nm-dark .cm-keyword {
+    color: #ff7b72;
+}
+.cm-s-nm-dark .cm-property {
+    color: var(--txt);
+}
+.cm-s-nm-dark .cm-variable {
+    color: #c9d1d9;
+}
+.cm-s-nm-dark .cm-comment {
+    color: #8b949e;
+    font-style: italic;
+}
+.cm-s-nm-dark .cm-operator,
+.cm-s-nm-dark .cm-punctuation {
+    color: #94a3b8;
+}
+/* Inner scrollbar */
+.cm-s-nm-dark .CodeMirror-scroll::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+.cm-s-nm-dark .CodeMirror-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.cm-s-nm-dark .CodeMirror-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 99px;
+}
+
+/* ── Editor status bar ───────────────────────────────────────────────────────── */
+.editor-status-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    gap: 12px;
+    background: var(--sur);
+}
+.editor-status-msg {
+    font-family: "Space Mono", monospace;
+    font-size: 0.65rem;
+    color: var(--mut);
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.2s;
+}
+.editor-status-err {
+    color: var(--err) !important;
+}
+.editor-status-ok {
+    color: var(--ok) !important;
+}
+.editor-footer-btns {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.btn-editor-cancel {
+    background: rgba(100, 116, 139, 0.09);
+    color: var(--mut);
+    border: 1px solid rgba(100, 116, 139, 0.25);
+    padding: 7px 16px;
+}
+.btn-editor-save {
+    background: var(--acc);
+    color: #0a0a0f;
+    font-weight: 800;
+    padding: 7px 20px;
+    min-width: 72px;
+}
+.btn-editor-save:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
 }

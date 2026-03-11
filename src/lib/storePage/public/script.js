@@ -97,6 +97,7 @@ const ICONS = {
     file: `<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2h7l4 4v12H5V2z"/><path d="M12 2v4h4"/></svg>`,
     warning: `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2L1.5 13h13L8 2z"/><path d="M8 7v3"/><circle cx="8" cy="11.5" r=".7" fill="currentColor"/></svg>`,
     custom: `<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2l2 6h6l-5 4 2 6-5-4-5 4 2-6-5-4h6z"/></svg>`,
+    settings: `<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.5"/><path d="M10 2.5v1M10 16.5v1M2.5 10h1M16.5 10h1M4.6 4.6l.7.7M14.7 14.7l.7.7M4.6 15.4l.7-.7M14.7 5.3l.7-.7"/></svg>`,
 };
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -240,10 +241,16 @@ async function openReadme(name, readmeUrl, event) {
         '<div class="modal-loading">' + SP() + " Loading…</div>";
     document.getElementById("modal-bg").classList.remove("hidden");
     try {
-        const isLocal = readmeUrl.startsWith("/api/local-readme");
-        const fetchUrl = isLocal
-            ? readmeUrl
-            : "/api/readme?url=" + encodeURIComponent(readmeUrl);
+        const isLocal =
+            readmeUrl.startsWith("/api/local-readme") ||
+            readmeUrl.includes("/api/local-readme");
+        let fetchUrl;
+        if (isLocal) {
+            // Normalize nextstore://app/api/... → /api/...
+            fetchUrl = readmeUrl.replace(/^nextstore:\/\/[^/]+/, "");
+        } else {
+            fetchUrl = "/api/readme?url=" + encodeURIComponent(readmeUrl);
+        }
         const r = await fetch(fetchUrl);
         document.getElementById("modal-body").innerHTML = md2html(
             await r.text(),
@@ -257,8 +264,174 @@ function closeModal() {
     document.getElementById("modal-bg").classList.add("hidden");
 }
 document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
+    if (e.key === "Escape") {
+        if (
+            !document
+                .getElementById("editor-modal-bg")
+                .classList.contains("hidden")
+        )
+            return; // handled by textarea
+        closeModal();
+    }
 });
+
+// ── handleEvents.json in-store editor (CodeMirror 5) ─────────────────────────
+let _editorAddonName = null;
+let _editorOriginal = "";
+let _cmEditor = null;
+
+function _initCM() {
+    if (_cmEditor) return;
+    const host = document.getElementById("editor-cm-host");
+    _cmEditor = CodeMirror(host, {
+        mode: { name: "javascript", json: true },
+        theme: "nm-dark",
+        lineNumbers: true,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        styleActiveLine: true,
+        foldGutter: true,
+        gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+        tabSize: 2,
+        indentWithTabs: false,
+        lineWrapping: false,
+        extraKeys: {
+            "Ctrl-S": () => saveHandleEvents(),
+            "Cmd-S": () => saveHandleEvents(),
+            Escape: () => closeEditorModal(),
+            Tab: (cm) => cm.execCommand("indentMore"),
+            "Shift-Tab": (cm) => cm.execCommand("indentLess"),
+        },
+    });
+    _cmEditor.on("change", () => {
+        try {
+            JSON.parse(_cmEditor.getValue());
+            setEditorStatus("", false);
+            document.getElementById("editor-save-btn").disabled = false;
+        } catch (e) {
+            setEditorStatus("⚠ " + e.message, true);
+            document.getElementById("editor-save-btn").disabled = true;
+        }
+    });
+}
+
+async function openHandleEvents(name, btn, event) {
+    event && event.stopPropagation();
+    if (!btn || btn.disabled) return;
+
+    const prev = btn.innerHTML;
+    btn.innerHTML = '<span class="spin"></span>';
+    btn.disabled = true;
+
+    try {
+        const r = await fetch(
+            "/api/read-handle-events?name=" + encodeURIComponent(name),
+        );
+        const data = await r.json();
+        if (!data.ok) throw new Error(data.error || "Failed to read file");
+
+        _editorAddonName = name;
+        _editorOriginal = formatJson(data.content);
+
+        document.getElementById("editor-modal-title").textContent =
+            name + " — handleEvents.json";
+        setEditorStatus("", false);
+        document.getElementById("editor-save-btn").disabled = false;
+        document.getElementById("editor-modal-bg").classList.remove("hidden");
+
+        // Init CM lazily on first open, then reuse
+        _initCM();
+        _cmEditor.setValue(_editorOriginal);
+        _cmEditor.clearHistory();
+        // Refresh after modal becomes visible
+        requestAnimationFrame(() => {
+            _cmEditor.refresh();
+            _cmEditor.focus();
+        });
+    } catch (e) {
+        // fallback: open in system editor
+        await api("/api/open-handle-events", { name }).catch(() => {});
+    } finally {
+        btn.innerHTML = prev;
+        btn.disabled = false;
+    }
+}
+
+function formatJson(str) {
+    try {
+        return JSON.stringify(JSON.parse(str), null, 2);
+    } catch {
+        return str;
+    }
+}
+
+function closeEditorModal() {
+    document.getElementById("editor-modal-bg").classList.add("hidden");
+    _editorAddonName = null;
+    _editorOriginal = "";
+    setEditorStatus("", false);
+}
+
+function setEditorStatus(msg, isError) {
+    const el = document.getElementById("editor-status-msg");
+    el.textContent = msg;
+    el.className =
+        "editor-status-msg" +
+        (isError ? " editor-status-err" : msg ? " editor-status-ok" : "");
+}
+
+async function saveHandleEvents() {
+    if (!_cmEditor) return;
+    const content = _cmEditor.getValue();
+    let parsed;
+    try {
+        parsed = JSON.parse(content);
+    } catch (e) {
+        setEditorStatus("⚠ Invalid JSON: " + e.message, true);
+        return;
+    }
+    const saveBtn = document.getElementById("editor-save-btn");
+    const prevHtml = saveBtn.innerHTML;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spin"></span>';
+
+    try {
+        const pretty = JSON.stringify(parsed, null, 2);
+        const data = await api("/api/save-handle-events", {
+            name: _editorAddonName,
+            content: pretty,
+        });
+        if (!data.ok) throw new Error(data.error || "Save failed");
+        _editorOriginal = pretty;
+        _cmEditor.setValue(pretty);
+        _cmEditor.clearHistory();
+        setEditorStatus("✓ Saved", false);
+        setTimeout(() => setEditorStatus("", false), 2500);
+    } catch (e) {
+        setEditorStatus("⚠ " + (e.message || "Save failed"), true);
+    } finally {
+        saveBtn.innerHTML = prevHtml;
+        saveBtn.disabled = false;
+    }
+}
+
+// ── Check handleEvents.json and show/hide settings button ────────────────────
+async function checkAndShowSettingsBtn(name, btnId, isInstalled) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    try {
+        const r = await fetch(
+            "/api/check-handle-events?name=" + encodeURIComponent(name),
+        );
+        const data = await r.json();
+        if (data.exists) {
+            btn.style.display = "";
+            btn.disabled = !isInstalled;
+        }
+    } catch {
+        // silently ignore
+    }
+}
 
 // ── Card builder (store items) ────────────────────────────────────────────────
 function buildCard(f, i, section, inst) {
@@ -275,11 +448,14 @@ function buildCard(f, i, section, inst) {
         ? `<span class="readme-icon" title="README" onclick="openReadme('${esc(f.name)}','${esc(f.readme)}',event)">${ICONS.readme}</span>`
         : "";
 
+    // Settings button: rendered but may be hidden/disabled until handleEvents check completes
+    const settingsBtn = `<button class="btn btn-settings" id="settings-btn-${cid.replace(/[^a-zA-Z0-9]/g, "_")}" title="Open handleEvents.json" onclick="openHandleEvents('${esc(f.name)}',this,event)" style="display:none" ${inst ? "" : "disabled"}>${ICONS.settings}</button>`;
+
     let actions;
     if (inst) {
         const tc = enabled ? "btn-on" : "btn-off";
         const tl = enabled ? `Disable` : `Enable`;
-        actions = `<button class="btn ${tc}" onclick="doToggle('${esc(f.name)}',this,event)">${tl}</button><button class="btn btn-danger" onclick="doDelete('${esc(f.name)}',this,event)" title="Delete">${ICONS.trash}</button>`;
+        actions = `<button class="btn ${tc}" onclick="doToggle('${esc(f.name)}',this,event)">${tl}</button><button class="btn btn-danger" onclick="doDelete('${esc(f.name)}',this,event)" title="Delete">${ICONS.trash}</button>${settingsBtn}`;
     } else {
         const dlArg = encodeURIComponent(
             JSON.stringify({
@@ -290,7 +466,7 @@ function buildCard(f, i, section, inst) {
                 subUrl: f.subUrl || "",
             }),
         );
-        actions = `<button class="btn btn-primary" onclick="doDownload(decodeURIComponent('${dlArg}'),this,event)">Download</button>`;
+        actions = `<button class="btn btn-primary" onclick="doDownload(decodeURIComponent('${dlArg}'),this,event)">Download</button>${settingsBtn}`;
     }
 
     const cls = [
@@ -317,6 +493,12 @@ function buildCard(f, i, section, inst) {
         }
     } else {
         cardSub = `${section === "themes" ? "Themes" : "Addons"} / ${f.name}`;
+    }
+
+    // Schedule async check for handleEvents.json (only if installed)
+    if (inst) {
+        const btnId = "settings-btn-" + cid.replace(/[^a-zA-Z0-9]/g, "_");
+        setTimeout(() => checkAndShowSettingsBtn(f.name, btnId, true), 0);
     }
 
     return `<div class="${cls}" style="animation-delay:${i * 0.048}s" id="card-${cid}" data-name="${f.name}" ${rmAttr}>
@@ -346,9 +528,13 @@ function buildCustomCard(item, i) {
         ? `<span class="readme-icon" title="README" onclick="openReadme('${esc(item.name)}','${esc(item.readme)}',event)">${ICONS.readme}</span>`
         : "";
 
+    const settingsBtnId =
+        "settings-btn-custom-" + item.name.replace(/[^a-zA-Z0-9]/g, "_");
+    const settingsBtn = `<button class="btn btn-settings" id="${settingsBtnId}" title="Open handleEvents.json" onclick="openHandleEvents('${esc(item.name)}',this,event)" style="display:none">${ICONS.settings}</button>`;
+
     const tc = item.enabled ? "btn-on" : "btn-off";
     const tl = item.enabled ? `Disable` : `Enable`;
-    const actions = `<button class="btn ${tc}" onclick="doToggle('${esc(item.name)}',this,event)">${tl}</button><button class="btn btn-danger" onclick="doDelete('${esc(item.name)}',this,event)" title="Delete">${ICONS.trash}</button>`;
+    const actions = `<button class="btn ${tc}" onclick="doToggle('${esc(item.name)}',this,event)">${tl}</button><button class="btn btn-danger" onclick="doDelete('${esc(item.name)}',this,event)" title="Delete">${ICONS.trash}</button>${settingsBtn}`;
 
     const cls = [
         "card custom-card installed",
@@ -359,6 +545,12 @@ function buildCustomCard(item, i) {
     const rmAttr = item.readme
         ? `onclick="openReadme('${esc(item.name)}','${esc(item.readme)}',event)"`
         : "";
+
+    // Schedule async check for handleEvents.json
+    setTimeout(
+        () => checkAndShowSettingsBtn(item.name, settingsBtnId, true),
+        0,
+    );
 
     return `<div class="${cls}" style="animation-delay:${i * 0.048}s" id="card-custom-${item.name}" data-name="${item.name}" ${rmAttr}>
   <div class="card-top">
@@ -477,8 +669,11 @@ async function doDownload(argsJson, btn, event) {
         if (card) {
             card.classList.add("installed");
             card.classList.remove("item-disabled");
+            const settingsBtnId =
+                "settings-btn-" + cid.replace(/[^a-zA-Z0-9]/g, "_");
             card.querySelector(".card-actions").innerHTML =
-                `<button class="btn btn-on" onclick="doToggle('${esc(args.name)}',this,event)">${ICONS.disable} Disable</button><button class="btn btn-danger" onclick="doDelete('${esc(args.name)}',this,event)" title="Delete">${ICONS.trash}</button>`;
+                `<button class="btn btn-on" onclick="doToggle('${esc(args.name)}',this,event)">${ICONS.disable} Disable</button><button class="btn btn-danger" onclick="doDelete('${esc(args.name)}',this,event)" title="Delete">${ICONS.trash}</button><button class="btn btn-settings" id="${settingsBtnId}" title="Open handleEvents.json" onclick="openHandleEvents('${esc(args.name)}',this,event)" style="display:none">${ICONS.settings}</button>`;
+            checkAndShowSettingsBtn(args.name, settingsBtnId, true);
             const ob = card.querySelector(".badge");
             if (ob) ob.remove();
         }

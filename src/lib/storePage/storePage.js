@@ -789,6 +789,117 @@ async function handleRequest(method, urlPath, qp, getBody) {
         }
     }
 
+    // ── Check if handleEvents.json exists for an addon ──
+    if (method === "GET" && urlPath === "/api/check-handle-events") {
+        try {
+            const { name } = qp;
+            if (!name) return json({ exists: false });
+            const raw =
+                fs
+                    .readdirSync(addonsDirectory)
+                    .find(
+                        (n) =>
+                            n.replace(/^!/, "").toLowerCase() ===
+                            name.toLowerCase(),
+                    ) || null;
+            if (!raw) return json({ exists: false });
+            const filePath = path.join(
+                addonsDirectory,
+                raw,
+                "handleEvents.json",
+            );
+            return json({ exists: fs.existsSync(filePath), path: filePath });
+        } catch (e) {
+            return json({ exists: false, error: e.message });
+        }
+    }
+
+    // ── Read handleEvents.json content ──
+    if (method === "GET" && urlPath === "/api/read-handle-events") {
+        try {
+            const { name } = qp;
+            if (!name) throw new Error("Missing name");
+            const raw =
+                fs
+                    .readdirSync(addonsDirectory)
+                    .find(
+                        (n) =>
+                            n.replace(/^!/, "").toLowerCase() ===
+                            name.toLowerCase(),
+                    ) || null;
+            if (!raw) throw new Error("Addon not found: " + name);
+            const filePath = path.join(
+                addonsDirectory,
+                raw,
+                "handleEvents.json",
+            );
+            if (!fs.existsSync(filePath))
+                throw new Error("handleEvents.json not found");
+            const content = fs.readFileSync(filePath, "utf8");
+            return json({ ok: true, content });
+        } catch (e) {
+            return json({ ok: false, error: e.message }, 500);
+        }
+    }
+
+    // ── Save handleEvents.json content ──
+    if (method === "POST" && urlPath === "/api/save-handle-events") {
+        try {
+            const { name, content } = JSON.parse(await getBody());
+            if (!name) throw new Error("Missing name");
+            // Validate JSON before saving
+            JSON.parse(content);
+            const raw =
+                fs
+                    .readdirSync(addonsDirectory)
+                    .find(
+                        (n) =>
+                            n.replace(/^!/, "").toLowerCase() ===
+                            name.toLowerCase(),
+                    ) || null;
+            if (!raw) throw new Error("Addon not found: " + name);
+            const filePath = path.join(
+                addonsDirectory,
+                raw,
+                "handleEvents.json",
+            );
+            if (!fs.existsSync(filePath))
+                throw new Error("handleEvents.json not found");
+            fs.writeFileSync(filePath, content, "utf8");
+            return json({ ok: true });
+        } catch (e) {
+            return json({ ok: false, error: e.message }, 500);
+        }
+    }
+
+    // ── Open handleEvents.json in default text editor (fallback) ──
+    if (method === "POST" && urlPath === "/api/open-handle-events") {
+        try {
+            const { name } = JSON.parse(await getBody());
+            if (!name) throw new Error("Missing name");
+            const raw =
+                fs
+                    .readdirSync(addonsDirectory)
+                    .find(
+                        (n) =>
+                            n.replace(/^!/, "").toLowerCase() ===
+                            name.toLowerCase(),
+                    ) || null;
+            if (!raw) throw new Error("Addon not found: " + name);
+            const filePath = path.join(
+                addonsDirectory,
+                raw,
+                "handleEvents.json",
+            );
+            if (!fs.existsSync(filePath))
+                throw new Error("handleEvents.json not found");
+            await shell.openPath(filePath);
+            return json({ ok: true });
+        } catch (e) {
+            return json({ ok: false, error: e.message }, 500);
+        }
+    }
+
     return notFound();
 }
 

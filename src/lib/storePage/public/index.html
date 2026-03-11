@@ -9,6 +9,9 @@
             rel="stylesheet"
         />
         <link rel="stylesheet" href="/public/style.css" />
+        <!-- CodeMirror 5 -->
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/lint.min.css">
     </head>
     <body>
         <header>
@@ -133,6 +136,35 @@
             </div>
         </main>
 
+        <!-- handleEvents editor modal -->
+        <div
+            class="modal-bg hidden"
+            id="editor-modal-bg"
+            onclick="if (event.target === this) closeEditorModal();"
+        >
+            <div class="modal editor-modal">
+                <div class="modal-head">
+                    <div class="editor-modal-title-wrap">
+                        <span class="modal-title" id="editor-modal-title">handleEvents.json</span>
+                        <span class="editor-modal-badge">JSON</span>
+                    </div>
+                    <button class="modal-close" onclick="closeEditorModal()">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                            <path d="M3 3l10 10M13 3L3 13" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="editor-wrap" id="editor-cm-host"></div>
+                <div class="editor-status-bar">
+                    <span class="editor-status-msg" id="editor-status-msg"></span>
+                    <div class="editor-footer-btns">
+                        <button class="btn btn-editor-cancel" onclick="closeEditorModal()">Cancel</button>
+                        <button class="btn btn-editor-save" id="editor-save-btn" onclick="saveHandleEvents()">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div
             class="modal-bg hidden"
             id="modal-bg"
@@ -161,6 +193,16 @@
             </div>
         </div>
 
+        <!-- CodeMirror 5 JS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/mode/javascript/javascript.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/edit/matchbrackets.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/edit/closebrackets.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/selection/active-line.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/fold/foldcode.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/fold/foldgutter.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/fold/brace-fold.min.js"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/fold/foldgutter.min.css">
         <script src="/public/script.js"></script>
     </body>
 </html>
