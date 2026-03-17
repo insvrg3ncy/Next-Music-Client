@@ -13,7 +13,6 @@ const defaultConfig = {
         startMinimized: false,
         splashScreen: true,
     },
-
     windowSettings: {
         titleBar: {
             enable: true,
@@ -26,6 +25,7 @@ const defaultConfig = {
 
     programSettings: {
         checkUpdates: true,
+        language: "en",
         richPresence: {
             enabled: true,
             rpcTitle: "Next Music",
@@ -100,6 +100,7 @@ function getPaths() {
     return {
         nextMusicDirectory: userData,
         addonsDirectory: path.join(userData, "Addons"),
+        languagesDirectory: path.join(userData, "Languages"), // <-- папка языков
         configFilePath: path.join(userData, "Config.json"),
     };
 }
@@ -125,14 +126,16 @@ function deepMerge(target, source) {
 
 // Load config
 function loadConfig() {
-    const { configFilePath, addonsDirectory } = getPaths();
+    const { configFilePath, addonsDirectory, languagesDirectory } = getPaths();
 
-    // Создаём папку Addons если её нет
     if (!fs.existsSync(addonsDirectory)) {
         fs.mkdirSync(addonsDirectory, { recursive: true });
     }
 
-    // Если конфиг не существует — создаём его
+    if (!fs.existsSync(languagesDirectory)) {
+        fs.mkdirSync(languagesDirectory, { recursive: true });
+    }
+
     if (!fs.existsSync(configFilePath)) {
         fs.writeFileSync(
             configFilePath,
@@ -144,8 +147,6 @@ function loadConfig() {
     try {
         const raw = fs.readFileSync(configFilePath, "utf8");
         const userConfig = JSON.parse(raw);
-
-        // Мёрджим userConfig поверх defaultConfig
         return deepMerge(userConfig, JSON.parse(JSON.stringify(defaultConfig)));
     } catch (err) {
         console.error("Failed to load config. Using default.", err);
@@ -153,10 +154,25 @@ function loadConfig() {
     }
 }
 
+// Save config
+function saveConfig(config) {
+    const { configFilePath } = getPaths();
+    try {
+        fs.writeFileSync(
+            configFilePath,
+            JSON.stringify(config, null, 4),
+            "utf-8",
+        );
+    } catch (err) {
+        console.error("Failed to save config:", err);
+    }
+}
+
 module.exports = {
     appIcon,
     trayIconPath,
     loadConfig,
+    saveConfig,
     getPaths,
     defaultConfig,
     injectList,

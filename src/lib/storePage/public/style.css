@@ -29,7 +29,7 @@ html {
 }
 body {
     color: var(--txt);
-    font-family: "Syne", sans-serif;
+    font-family: "Syne", "Science Gothic", sans-serif;
     min-height: 100vh;
     overflow-x: hidden;
     border: 0.0625rem solid var(--bor);
@@ -117,7 +117,7 @@ header {
     border-bottom: none;
     background: transparent;
     color: var(--mut);
-    font-family: "Syne", sans-serif;
+    font-family: "Syne", "Science Gothic", sans-serif;
     font-size: 0.8rem;
     font-weight: 700;
     cursor: pointer;
@@ -406,7 +406,7 @@ main {
     padding: 8px 10px;
     border-radius: 9px;
     border: none;
-    font-family: "Syne", sans-serif;
+    font-family: "Syne", "Science Gothic", sans-serif;
     font-size: 0.76rem;
     font-weight: 700;
     cursor: pointer;
@@ -781,7 +781,7 @@ main {
     border: none;
     background: var(--ym-controls-color-primary-default-enabled);
     color: #0a0a0f;
-    font-family: "Syne", sans-serif;
+    font-family: "Syne", "Science Gothic", sans-serif;
     font-size: 0.76rem;
     font-weight: 800;
     cursor: pointer;

@@ -4,13 +4,21 @@ const fs = require("fs");
 let config;
 
 function loadConfig() {
-    const { nextMusicDirectory, addonsDirectory, configFilePath } = getPaths();
+    const {
+        nextMusicDirectory,
+        addonsDirectory,
+        languagesDirectory,
+        configFilePath,
+    } = getPaths();
 
     if (!fs.existsSync(nextMusicDirectory))
         fs.mkdirSync(nextMusicDirectory, { recursive: true });
 
     if (!fs.existsSync(addonsDirectory))
         fs.mkdirSync(addonsDirectory, { recursive: true });
+
+    if (!fs.existsSync(languagesDirectory))
+        fs.mkdirSync(languagesDirectory, { recursive: true });
 
     if (!fs.existsSync(configFilePath)) {
         fs.writeFileSync(
@@ -42,4 +50,25 @@ function getConfig() {
     return config;
 }
 
-module.exports = { getConfig };
+function saveConfig(newConfig) {
+    const { configFilePath } = getPaths();
+    config = newConfig;
+    try {
+        fs.writeFileSync(
+            configFilePath,
+            JSON.stringify(config, null, 2),
+            "utf-8",
+        );
+    } catch (err) {
+        console.error("[Config] Failed to save config:", err);
+    }
+}
+
+function setLanguage(langCode) {
+    const cfg = getConfig();
+    if (!cfg.programSettings) cfg.programSettings = {};
+    cfg.programSettings.language = langCode;
+    saveConfig(cfg);
+}
+
+module.exports = { getConfig, saveConfig, setLanguage };

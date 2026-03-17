@@ -8,6 +8,12 @@ const GITHUB_REPO = "Next-Music-Extensions";
 
 const { getPaths } = require("../../config.js");
 const { addonsDirectory } = getPaths();
+const {
+    t: langT,
+    getCurrentLangCode,
+    getAvailableLanguages,
+} = require("../langManager.js");
+const { getConfig } = require("../configManager.js");
 
 if (!fs.existsSync(addonsDirectory))
     fs.mkdirSync(addonsDirectory, { recursive: true });
@@ -728,6 +734,50 @@ async function handleRequest(method, urlPath, qp, getBody) {
             return json({ ok: true });
         } catch (e) {
             return json({ ok: false, error: e.message }, 500);
+        }
+    }
+
+    // ── Serve current language JSON to the store UI ──
+    if (method === "GET" && urlPath === "/api/lang") {
+        try {
+            const { languagesDirectory } = getPaths();
+            // Читаем язык напрямую из конфига — надёжнее чем getCurrentLangCode()
+            // т.к. langManager может быть не инициализирован в этом модуле
+            const config = getConfig();
+            const langCode =
+                config?.programSettings?.language ||
+                getCurrentLangCode() ||
+                "en";
+            console.log(
+                "[Store /api/lang] langCode:",
+                langCode,
+                "dir:",
+                languagesDirectory,
+            );
+            const langFile = path.join(languagesDirectory, `${langCode}.json`);
+            if (fs.existsSync(langFile)) {
+                console.log("[Store /api/lang] serving:", langFile);
+                return text(
+                    fs.readFileSync(langFile, "utf-8"),
+                    "application/json; charset=utf-8",
+                );
+            }
+            const enFile = path.join(languagesDirectory, "en.json");
+            if (fs.existsSync(enFile)) {
+                console.log("[Store /api/lang] fallback to en:", enFile);
+                return text(
+                    fs.readFileSync(enFile, "utf-8"),
+                    "application/json; charset=utf-8",
+                );
+            }
+            console.warn(
+                "[Store /api/lang] no lang file found in:",
+                languagesDirectory,
+            );
+            return json({ error: "Language file not found" }, 404);
+        } catch (e) {
+            console.error("[Store /api/lang] error:", e.message);
+            return json({ error: e.message }, 500);
         }
     }
 

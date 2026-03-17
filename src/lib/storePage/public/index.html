@@ -12,13 +12,16 @@
         <!-- CodeMirror 5 -->
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/addon/lint/lint.min.css">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Science+Gothic:wght@100..900&display=swap" rel="stylesheet">
     </head>
     <body>
         <header>
             <div class="logo-icon"></div>
             <div class="header-text">
                 <h1>Next Music <span>Store</span></h1>
-                <p>WEB-NEXT-MUSIC / EXTENSIONS</p>
+                <p>WEB-NEXT-MUSIC / NEXT-MUSIC-EXTENSIONS</p>
             </div>
             <button class="store-close-btn" onclick="window.parent.postMessage('nextStore:close', '*')" title="Close">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
@@ -30,11 +33,11 @@
         <div class="tabs">
             <button class="tab active" onclick="switchTab('addons', this)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-blocks-icon lucide-blocks"><path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2"/><rect x="14" y="2" width="8" height="8" rx="1"/></svg>
-                Addons<span class="tc" id="tc-addons">…</span>
+                <span class="tab-label">Addons</span><span class="tc" id="tc-addons">…</span>
             </button>
             <button class="tab" onclick="switchTab('themes', this)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-palette-icon lucide-palette"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"/><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/></svg>
-                Themes<span class="tc" id="tc-themes">…</span>
+                <span class="tab-label">Themes</span><span class="tc" id="tc-themes">…</span>
             </button>
             <button
                 class="tab"
@@ -42,7 +45,7 @@
                 onclick="switchTab('installed', this)"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hard-drive-icon lucide-hard-drive"><path d="M10 16h.01"/><path d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M21.946 12.013H2.054"/><path d="M6 16h.01"/></svg>
-                Installed<span class="tc" id="tc-installed">…</span>
+                <span class="tab-label">Installed</span><span class="tc" id="tc-installed">…</span>
             </button>
         </div>
 

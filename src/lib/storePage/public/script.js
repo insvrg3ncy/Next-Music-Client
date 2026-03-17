@@ -22,6 +22,97 @@ const CARD_BUTTONS_AFTER_DOWNLOAD = ["toggle", "settings", "delete"];
 // Кнопки установленной карточки, когда доступно обновление
 const CARD_BUTTONS_WITH_UPDATE = ["update", "toggle", "settings", "delete"];
 
+// ── Локализация (langManager на клиенте) ─────────────────────────────────────
+
+let _lang = {};
+
+async function loadLang() {
+    try {
+        const res = await fetch("/api/lang");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        if (data && typeof data === "object" && !data.error && data.store) {
+            _lang = data;
+            console.log("[lang] loaded:", data.store.btnDownload);
+        } else {
+            console.warn("[lang] unexpected response:", data);
+        }
+    } catch (e) {
+        console.warn("[lang] failed:", e.message);
+    }
+}
+
+function t(key, vars = {}) {
+    const parts = key.split(".");
+    let value = _lang;
+    for (const part of parts) {
+        if (value && typeof value === "object" && part in value) {
+            value = value[part];
+        } else {
+            return key;
+        }
+    }
+    if (typeof value !== "string") return key;
+    return value.replace(/\{(\w+)\}/g, (_, k) =>
+        k in vars ? vars[k] : `{${k}}`,
+    );
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+(async () => {
+    await loadLang();
+    applyStaticI18n();
+})();
+
+function applyStaticI18n() {
+    // Close button tooltip
+    const closeBtn = document.querySelector(".store-close-btn");
+    if (closeBtn) closeBtn.title = t("store.tooltipClose");
+
+    // Tab labels
+    const tabAddons = document.querySelector(
+        "[onclick*=\"switchTab('addons'\"]",
+    );
+    const tabThemes = document.querySelector(
+        "[onclick*=\"switchTab('themes'\"]",
+    );
+    const tabInstalled = document.querySelector(
+        "[onclick*=\"switchTab('installed'\"]",
+    );
+    if (tabAddons) {
+        const txt = tabAddons.querySelector(".tab-label");
+        if (txt) txt.textContent = t("store.tabAddons");
+    }
+    if (tabThemes) {
+        const txt = tabThemes.querySelector(".tab-label");
+        if (txt) txt.textContent = t("store.tabThemes");
+    }
+    if (tabInstalled) {
+        const txt = tabInstalled.querySelector(".tab-label");
+        if (txt) txt.textContent = t("store.tabInstalled");
+    }
+
+    // Search placeholder
+    const searchBox = document.getElementById("search-box");
+    if (searchBox) searchBox.placeholder = t("store.searchPlaceholder");
+
+    // Section labels
+    const secAddons = document.querySelector("#panel-addons .sec-label");
+    if (secAddons) secAddons.textContent = t("store.sectionAddons");
+    const secThemes = document.querySelector("#panel-themes .sec-label");
+    if (secThemes) secThemes.textContent = t("store.sectionThemes");
+    const secInstalled = document.querySelector("#panel-installed .sec-label");
+    if (secInstalled) secInstalled.textContent = t("store.sectionInstalled");
+
+    // Editor modal static buttons / badge
+    const editorBadge = document.querySelector(".editor-modal-badge");
+    if (editorBadge) editorBadge.textContent = t("store.modalEditorBadge");
+    const cancelBtn = document.querySelector(".btn-editor-cancel");
+    if (cancelBtn) cancelBtn.textContent = t("store.btnCancel");
+    const saveBtn = document.querySelector(".btn-editor-save");
+    if (saveBtn) saveBtn.textContent = t("store.btnSave");
+}
+
 // ── Apply CSS vars from parent window ────────────────────────────────────────
 (async () => {
     const vars = await fetch("/api/theme-vars").then((r) => r.json());
@@ -137,8 +228,8 @@ function showRestartBanner() {
     banner.id = "restart-banner";
     banner.innerHTML = `
         <span class="restart-icon">${ICONS.warning}</span>
-        <span class="restart-text">Restart required to apply changes</span>
-        <button class="btn-restart" onclick="doReload()">Restart</button>`;
+        <span class="restart-text">${t("store.statusRestartRequired")}</span>
+        <button class="btn-restart" onclick="doReload()">${t("store.btnRestart")}</button>`;
     document.body.appendChild(banner);
     // animate in
     requestAnimationFrame(() => banner.classList.add("visible"));
@@ -200,7 +291,7 @@ function onSearch(q) {
             noR.className = "no-results";
             grid.appendChild(noR);
         }
-        noR.textContent = 'No results for "' + q + '"';
+        noR.textContent = t("store.searchNoResults", { query: q });
     } else if (noR) {
         noR.remove();
     }
@@ -260,9 +351,12 @@ function md2html(t) {
 // ── README modal ──────────────────────────────────────────────────────────────
 async function openReadme(name, readmeUrl, event) {
     event && event.stopPropagation();
-    document.getElementById("modal-title").textContent = name + " — README";
+    document.getElementById("modal-title").textContent = t(
+        "store.modalReadmeTitle",
+        { name },
+    );
     document.getElementById("modal-body").innerHTML =
-        '<div class="modal-loading">' + SP() + " Loading…</div>";
+        `<div class="modal-loading">${SP()} ${t("store.statusLoading")}</div>`;
     document.getElementById("modal-bg").classList.remove("hidden");
     try {
         const isLocal =
@@ -281,7 +375,7 @@ async function openReadme(name, readmeUrl, event) {
         );
     } catch {
         document.getElementById("modal-body").innerHTML =
-            '<div class="modal-loading">Failed to load README.</div>';
+            `<div class="modal-loading">${t("store.statusFailedReadme")}</div>`;
     }
 }
 function closeModal() {
@@ -333,7 +427,10 @@ function _initCM() {
             setEditorStatus("", false);
             document.getElementById("editor-save-btn").disabled = false;
         } catch (e) {
-            setEditorStatus("⚠ " + e.message, true);
+            setEditorStatus(
+                t("store.statusInvalidJson", { message: e.message }),
+                true,
+            );
             document.getElementById("editor-save-btn").disabled = true;
         }
     });
@@ -357,8 +454,10 @@ async function openHandleEvents(name, btn, event) {
         _editorAddonName = name;
         _editorOriginal = formatJson(data.content);
 
-        document.getElementById("editor-modal-title").textContent =
-            name + " — handleEvents.json";
+        document.getElementById("editor-modal-title").textContent = t(
+            "store.modalEditorTitle",
+            { name },
+        );
         setEditorStatus("", false);
         document.getElementById("editor-save-btn").disabled = false;
         document.getElementById("editor-modal-bg").classList.remove("hidden");
@@ -411,7 +510,10 @@ async function saveHandleEvents() {
     try {
         parsed = JSON.parse(content);
     } catch (e) {
-        setEditorStatus("⚠ Invalid JSON: " + e.message, true);
+        setEditorStatus(
+            t("store.statusInvalidJson", { message: e.message }),
+            true,
+        );
         return;
     }
     const saveBtn = document.getElementById("editor-save-btn");
@@ -429,10 +531,15 @@ async function saveHandleEvents() {
         _editorOriginal = pretty;
         _cmEditor.setValue(pretty);
         _cmEditor.clearHistory();
-        setEditorStatus("✓ Saved", false);
+        setEditorStatus(t("store.statusSaved"), false);
         setTimeout(() => setEditorStatus("", false), 2500);
     } catch (e) {
-        setEditorStatus("⚠ " + (e.message || "Save failed"), true);
+        setEditorStatus(
+            t("store.statusInvalidJson", {
+                message: e.message || t("store.statusSaveFailed"),
+            }),
+            true,
+        );
     } finally {
         saveBtn.innerHTML = prevHtml;
         saveBtn.disabled = false;
@@ -468,29 +575,29 @@ function renderButtons(order, ctx) {
                     const tl = ctx.enabled
                         ? ctx.isIconMode
                             ? ICONS.disable
-                            : `Disable`
+                            : t("store.btnDisable")
                         : ctx.isIconMode
                           ? ICONS.enable
-                          : `Enable`;
+                          : t("store.btnEnable");
                     const title = ctx.isIconMode
                         ? ctx.enabled
-                            ? "Disable"
-                            : "Enable"
+                            ? t("store.tooltipDisable")
+                            : t("store.tooltipEnable")
                         : "";
                     const iconCls = ctx.isIconMode ? " btn-toggle-icon" : "";
                     return `<button class="btn ${tc}${iconCls}" onclick="doToggle('${esc(ctx.name)}',this,event)" title="${title}">${tl}</button>`;
                 }
                 case "delete":
-                    return `<button class="btn btn-danger" onclick="doDelete('${esc(ctx.name)}',this,event)" title="Delete">${ICONS.trash}</button>`;
+                    return `<button class="btn btn-danger" onclick="doDelete('${esc(ctx.name)}',this,event)" title="${t("store.tooltipDelete")}">${ICONS.trash}</button>`;
                 case "settings":
-                    return `<button class="btn btn-settings" id="${ctx.settingsBtnId}" title="Open handleEvents.json" onclick="openHandleEvents('${esc(ctx.name)}',this,event)" style="display:none" ${ctx.inst !== undefined && !ctx.inst ? "disabled" : ""}>${ICONS.settings}</button>`;
+                    return `<button class="btn btn-settings" id="${ctx.settingsBtnId}" title="${t("store.tooltipSettings")}" onclick="openHandleEvents('${esc(ctx.name)}',this,event)" style="display:none" ${ctx.inst !== undefined && !ctx.inst ? "disabled" : ""}>${ICONS.settings}</button>`;
                 case "download":
                     return ctx.dlArg
-                        ? `<button class="btn btn-primary" onclick="doDownload(decodeURIComponent('${ctx.dlArg}'),this,event)">Download</button>`
+                        ? `<button class="btn btn-primary" onclick="doDownload(decodeURIComponent('${ctx.dlArg}'),this,event)">${t("store.btnDownload")}</button>`
                         : "";
                 case "update":
                     return ctx.updateDlArg
-                        ? `<button class="btn btn-primary btn-update" title="Update available" onclick="doUpdate(decodeURIComponent('${ctx.updateDlArg}'),this,event)">Update</button>`
+                        ? `<button class="btn btn-primary btn-update" title="${t("store.btnUpdate")}" onclick="doUpdate(decodeURIComponent('${ctx.updateDlArg}'),this,event)">${t("store.btnUpdate")}</button>`
                         : "";
                 default:
                     return "";
@@ -511,7 +618,7 @@ function buildCard(f, i, section, inst) {
         : `<div class="card-logo-ph">${iconSvg}</div>`;
 
     const rmIcon = f.readme
-        ? `<span class="readme-icon" title="README" onclick="openReadme('${esc(f.name)}','${esc(f.readme)}',event)">${ICONS.readme}</span>`
+        ? `<span class="readme-icon" title="${t("store.tooltipReadme")}" onclick="openReadme('${esc(f.name)}','${esc(f.readme)}',event)">${ICONS.readme}</span>`
         : "";
 
     let actions;
@@ -561,7 +668,7 @@ function buildCard(f, i, section, inst) {
             const repoUrl = esc(`https://github.com/${m[1]}/${m[2]}`);
             cardSub = `<a class="card-sub-link" href="#" onclick="openInBrowser('${repoUrl}',event)">${m[1]} / ${m[2]}</a>`;
         } else {
-            cardSub = `${section === "themes" ? "Themes" : "Addons"} / ${f.name}`;
+            cardSub = `${section === "themes" ? t("store.sectionThemes") : t("store.sectionAddons")} / ${f.name}`;
         }
     } else {
         cardSub = `${section === "themes" ? "Themes" : "Addons"} / ${f.name}`;
@@ -597,7 +704,7 @@ function buildCustomCard(item, i) {
         : `<div class="card-logo-ph custom">${iconSvg}</div>`;
 
     const rmIcon = item.readme
-        ? `<span class="readme-icon" title="README" onclick="openReadme('${esc(item.name)}','${esc(item.readme)}',event)">${ICONS.readme}</span>`
+        ? `<span class="readme-icon" title="${t("store.tooltipReadme")}" onclick="openReadme('${esc(item.name)}','${esc(item.readme)}',event)">${ICONS.readme}</span>`
         : "";
 
     const settingsBtnId =
@@ -631,7 +738,7 @@ function buildCustomCard(item, i) {
     ${logoTag}
     <div class="card-meta">
       <div class="card-name"><span class="card-name-text">${item.name}</span>${rmIcon}</div>
-      <div class="card-sub">${isDir ? "Folder" : "File"} — local</div>
+      <div class="card-sub">${isDir ? t("store.cardFolderLocal") : t("store.cardFileLocal")}</div>
     </div>
   </div>
   <div class="card-actions">${actions}</div>
@@ -651,7 +758,7 @@ async function loadSection(section, repoSection, gridId, countId) {
         allItems[section] = items;
         countEl.textContent = items.length;
         if (!items.length) {
-            grid.innerHTML = `<div class="empty">Nothing found in ${repoSection}.</div>`;
+            grid.innerHTML = `<div class="empty">${t("store.statusNothingFound", { section: repoSection })}</div>`;
             return;
         }
         // Attach install info, then sort: enabled → installed/disabled → not installed
@@ -682,7 +789,7 @@ async function loadSection(section, repoSection, gridId, countId) {
         });
         return true;
     } catch (e) {
-        grid.innerHTML = `<div class="empty">Failed to load ${repoSection}.<br><code>${e.message}</code></div>`;
+        grid.innerHTML = `<div class="empty">${t("store.statusFailedLoad", { section: repoSection })}<br><code>${e.message}</code></div>`;
         return false;
     }
 }
@@ -691,6 +798,8 @@ async function loadCustom() {
     const grid = document.getElementById("grid-custom");
     const countEl = document.getElementById("tc-custom");
     const tabBtn = document.getElementById("tab-custom");
+    // Вкладка custom присутствует только в офлайн-режиме
+    if (!grid || !countEl || !tabBtn) return;
     try {
         const known = [...allItems.addons, ...allItems.themes].map(
             (f) => f.name,
@@ -703,14 +812,15 @@ async function loadCustom() {
         countEl.textContent = items.length;
         tabBtn.style.display = items.length > 0 ? "" : "none";
         if (!items.length) {
-            grid.innerHTML = '<div class="empty">No custom files found.</div>';
+            grid.innerHTML = `<div class="empty">${t("store.statusEmptyCustom")}</div>`;
             return;
         }
         grid.innerHTML = items
             .map((item, i) => buildCustomCard(item, i))
             .join("");
     } catch (e) {
-        grid.innerHTML = `<div class="empty">Failed to load custom items.<br><code>${e.message}</code></div>`;
+        if (grid)
+            grid.innerHTML = `<div class="empty">${t("store.statusFailedLoad", { section: t("store.tabInstalled") })}<br><code>${e.message}</code></div>`;
     }
 }
 
@@ -718,7 +828,7 @@ async function loadCustom() {
 function startDownloadProgress(btn) {
     btn.disabled = true;
     btn.dataset.downloading = "1";
-    btn.innerHTML = `Downloading…`;
+    btn.innerHTML = `${t("store.btnDownloading")}`;
     return null;
 }
 
@@ -769,12 +879,12 @@ async function doDownload(argsJson, btn, event) {
             setBtn(
                 btn,
                 '<span class="sb sb-err">✗ ' +
-                    (data.error || "Error") +
+                    (data.error || t("store.statusError")) +
                     "</span>",
                 false,
             );
             setTimeout(() => {
-                btn.innerHTML = `Download`;
+                btn.innerHTML = t("store.btnDownload");
                 btn.disabled = false;
             }, 3000);
         }, 290);
@@ -835,7 +945,7 @@ async function doUpdate(argsJson, btn, event) {
     const args = JSON.parse(argsJson);
     btn.dataset.downloading = "1";
     btn.disabled = true;
-    btn.innerHTML = `Updating…`;
+    btn.innerHTML = `${t("store.btnUpdating")}`;
     const data = await api("/api/download", args).catch((e) => ({
         ok: false,
         error: e.message,
@@ -869,9 +979,9 @@ async function doUpdate(argsJson, btn, event) {
         setTimeout(loadInstalled, 300);
     } else {
         btn.disabled = false;
-        btn.innerHTML = `<span class="sb sb-err">✗ ${data.error || "Error"}</span>`;
+        btn.innerHTML = `<span class="sb sb-err">✗ ${data.error || t("store.statusError")}</span>`;
         setTimeout(() => {
-            btn.innerHTML = `Update`;
+            btn.innerHTML = t("store.btnUpdate");
         }, 3000);
     }
 }
@@ -896,21 +1006,23 @@ async function doToggle(name, btn, event) {
         if (nowEnabled) {
             btn.className =
                 "btn btn-on" + (isIconMode ? " btn-toggle-icon" : "");
-            btn.innerHTML = isIconMode ? ICONS.disable : `Disable`;
-            btn.title = isIconMode ? "Disable" : "";
+            btn.innerHTML = isIconMode ? ICONS.disable : t("store.btnDisable");
+            btn.title = isIconMode ? t("store.tooltipDisable") : "";
             card && card.classList.remove("item-disabled");
         } else {
             btn.className =
                 "btn btn-off" + (isIconMode ? " btn-toggle-icon" : "");
-            btn.innerHTML = isIconMode ? ICONS.enable : `Enable`;
-            btn.title = isIconMode ? "Enable" : "";
+            btn.innerHTML = isIconMode ? ICONS.enable : t("store.btnEnable");
+            btn.title = isIconMode ? t("store.tooltipEnable") : "";
             card && card.classList.add("item-disabled");
         }
         showRestartBanner();
         broadcastChange("toggled", { name, enabled: nowEnabled });
     } else {
         btn.className = wasEnabled ? "btn btn-on" : "btn btn-off";
-        btn.innerHTML = wasEnabled ? `Disable` : `Enable`;
+        btn.innerHTML = wasEnabled
+            ? t("store.btnDisable")
+            : t("store.btnEnable");
         const errSpan = document.createElement("span");
         errSpan.className = "sb sb-err";
         errSpan.style.cssText = "margin-left:6px";
@@ -999,8 +1111,7 @@ function renderInstalled(all) {
     allItems.installed = all;
     countEl.textContent = all.length;
     if (!all.length) {
-        grid.innerHTML =
-            '<div class="empty">No installed extensions found.</div>';
+        grid.innerHTML = `<div class="empty">${t("store.statusEmptyInstalled")}</div>`;
         return;
     }
     grid.innerHTML = all.map((item, i) => buildCustomCard(item, i)).join("");
@@ -1025,7 +1136,7 @@ async function loadInstalled(instant = false) {
     } catch (e) {
         // Don't overwrite instant render with an error if we already showed something
         if (!allItems.installed || !allItems.installed.length) {
-            grid.innerHTML = `<div class="empty">Failed to load installed items.<br><code>${e.message}</code></div>`;
+            grid.innerHTML = `<div class="empty">${t("store.statusFailedLoadInstalled")}<br><code>${e.message}</code></div>`;
         }
     }
 }
@@ -1045,7 +1156,7 @@ Promise.all([
             tabCustom.innerHTML = `${ICONS.folder} Local<span class="tc tc-custom" id="tc-custom">…</span>`;
         }
         const secLabel = document.querySelector("#panel-custom .sec-label");
-        if (secLabel) secLabel.textContent = "Local — installed extensions";
+        if (secLabel) secLabel.textContent = t("store.sectionLocal");
         const addonsTab = document.querySelector(".tab.active");
         if (addonsTab) addonsTab.classList.remove("active");
         if (tabCustom) tabCustom.classList.add("active");
