@@ -141,7 +141,7 @@ app.whenReady().then(() => {
         obsWidgetService.startServer({ port: 4091 });
     }
 
-    if (config?.programSettings?.richPresence?.enabled) {
+    if (config?.programSettings?.richPresence?.enable) {
         presenceService(config);
     }
 });

@@ -1,11 +1,13 @@
 {
     "tray": {
         "appTitle": "💖 Next Music {version} ⚡",
+        "openFolders": "Open",
         "settings": "Settings",
         "openMusicFolder": "Open Next Music folder",
         "openAddonsFolder": "Open addons folder",
+        "openLanguageFolder": "Open language folder",
         "openConfig": "Open config",
-        "downloadExtensions": "Download extensions",
+        "extensionRepository": "Extensions repo",
         "donate": "Donate",
         "info": "Info",
         "checkUpdates": "Check updates",

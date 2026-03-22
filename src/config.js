@@ -24,10 +24,8 @@ const defaultConfig = {
     },
 
     programSettings: {
-        checkUpdates: true,
-        language: "en",
         richPresence: {
-            enabled: true,
+            enable: true,
             rpcTitle: "Next Music",
             buttons: {
                 trackButton: true,
@@ -38,9 +36,11 @@ const defaultConfig = {
             enable: true,
             onlineScripts: [],
         },
+        checkUpdates: true,
         obsWidget: false,
         alwaysExpandedPlayer: false,
         disableAutoZoom: false,
+        language: "en",
     },
 
     experiments: {
@@ -85,7 +85,7 @@ const injectList = [
     },
     {
         file: "siteRPCServer.js",
-        condition: (config) => config?.programSettings?.richPresence?.enabled,
+        condition: (config) => config?.programSettings?.richPresence?.enable,
     },
     {
         file: "volumeNormalization.js",

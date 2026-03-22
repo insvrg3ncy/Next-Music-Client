@@ -1,7 +1,39 @@
 const { getPaths, defaultConfig } = require("../config.js");
 const fs = require("fs");
-
 let config;
+
+const CONFIG_EXTRA_KEYS_WHITELIST = new Set(["labs"]);
+
+function reorderConfig(obj, defaultObj, isRoot = true) {
+    if (
+        typeof defaultObj !== "object" ||
+        defaultObj === null ||
+        Array.isArray(defaultObj)
+    ) {
+        return obj ?? defaultObj;
+    }
+
+    const result = {};
+
+    for (const key of Object.keys(defaultObj)) {
+        if (key in obj) {
+            result[key] = reorderConfig(obj[key], defaultObj[key], false);
+        } else {
+            result[key] = structuredClone(defaultObj[key]);
+        }
+    }
+
+    // Сохраняем только ключи из белого списка
+    if (isRoot) {
+        for (const key of Object.keys(obj)) {
+            if (!(key in defaultObj) && CONFIG_EXTRA_KEYS_WHITELIST.has(key)) {
+                result[key] = obj[key];
+            }
+        }
+    }
+
+    return result;
+}
 
 function loadConfig() {
     const {
@@ -13,10 +45,8 @@ function loadConfig() {
 
     if (!fs.existsSync(nextMusicDirectory))
         fs.mkdirSync(nextMusicDirectory, { recursive: true });
-
     if (!fs.existsSync(addonsDirectory))
         fs.mkdirSync(addonsDirectory, { recursive: true });
-
     if (!fs.existsSync(languagesDirectory))
         fs.mkdirSync(languagesDirectory, { recursive: true });
 
@@ -32,7 +62,17 @@ function loadConfig() {
 
     try {
         const raw = fs.readFileSync(configFilePath, "utf-8");
-        config = JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        config = reorderConfig(parsed, defaultConfig);
+
+        // Если порядок или состав изменились — перезаписываем файл
+        if (JSON.stringify(parsed) !== JSON.stringify(config)) {
+            fs.writeFileSync(
+                configFilePath,
+                JSON.stringify(config, null, 2),
+                "utf-8",
+            );
+        }
     } catch {
         config = structuredClone(defaultConfig);
         fs.writeFileSync(
@@ -52,7 +92,7 @@ function getConfig() {
 
 function saveConfig(newConfig) {
     const { configFilePath } = getPaths();
-    config = newConfig;
+    config = reorderConfig(newConfig, defaultConfig);
     try {
         fs.writeFileSync(
             configFilePath,
@@ -72,7 +112,6 @@ function setLanguage(langCode) {
 }
 
 function updateConfig(newConfig) {
-    _config = newConfig;
     saveConfig(newConfig);
 }
 

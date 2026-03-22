@@ -10,18 +10,12 @@ const {
 const { checkForUpdates } = require("../lib/updater");
 const { version: CURRENT_VERSION } = require("../../package.json");
 const { trayIconPath, getPaths } = require("../config.js");
-const { getConfig, setLanguage } = require("../lib/configManager.js");
+const { getConfig } = require("../lib/configManager.js");
 const {
     createSettingsWindow,
     setTrayRebuilder,
 } = require("./window/settingsWindow/createSettingsWindow.js");
-const {
-    initLanguages,
-    loadLanguage,
-    getAvailableLanguages,
-    getCurrentLangCode,
-    t,
-} = require("../lib/langManager.js");
+const { initLanguages, t } = require("../lib/langManager.js");
 const { createInfoWindow } = require("./window/createInfoWindow.js");
 const { createInfoV2Window } = require("./window/createInfoV2Window.js");
 const config = getConfig();
@@ -34,7 +28,6 @@ const trayIcon = nativeImage
     .createFromPath(trayIconPath)
     .resize({ width: 24, height: 24 });
 
-// Инициализация языка
 function setupLanguage() {
     const { languagesDirectory } = getPaths();
     const config = getConfig();
@@ -42,33 +35,8 @@ function setupLanguage() {
     initLanguages(languagesDirectory, langCode);
 }
 
-// Построение меню
 function buildContextMenu(nextMusicDirectory, addonsDirectory, configFilePath) {
     const { languagesDirectory } = getPaths();
-    const availableLanguages = getAvailableLanguages(languagesDirectory);
-    const currentLangCode = getCurrentLangCode();
-
-    const languageSubmenu = availableLanguages.map((langCode) => ({
-        label: langCode,
-        type: "radio",
-        checked: langCode === currentLangCode,
-        click: () => {
-            if (langCode === getCurrentLangCode()) return;
-
-            loadLanguage(languagesDirectory, langCode);
-            setLanguage(langCode);
-            rebuildTrayMenu(
-                nextMusicDirectory,
-                addonsDirectory,
-                configFilePath,
-            );
-
-            // Отправить всем открытым окнам
-            BrowserWindow.getAllWindows().forEach((win) => {
-                win.webContents.send("change-language", langCode);
-            });
-        },
-    }));
 
     return Menu.buildFromTemplate([
         {
@@ -77,43 +45,41 @@ function buildContextMenu(nextMusicDirectory, addonsDirectory, configFilePath) {
         },
         { type: "separator" },
         {
-            label: t("tray.openMusicFolder"),
-            click: async () => {
-                if (!nextMusicDirectory) {
-                    console.error("nextMusicDirectory is not defined");
-                    return;
-                }
-                const result = await shell.openPath(
-                    path.normalize(nextMusicDirectory),
-                );
-                if (result) console.error("Failed to open path:", result);
-            },
-        },
-        {
-            label: t("tray.openAddonsFolder"),
-            click: async () => {
-                if (!addonsDirectory) {
-                    console.error("addonsDirectory is not defined");
-                    return;
-                }
-                const result = await shell.openPath(
-                    path.normalize(addonsDirectory),
-                );
-                if (result) console.error("Failed to open path:", result);
-            },
-        },
-        {
-            label: t("tray.openConfig"),
-            click: async () => {
-                if (!configFilePath) {
-                    console.error("configFilePath is not defined");
-                    return;
-                }
-                const result = await shell.openPath(
-                    path.normalize(configFilePath),
-                );
-                if (result) console.error("Failed to open path:", result);
-            },
+            label: t("tray.openFolders"),
+            submenu: [
+                {
+                    label: t("tray.openMusicFolder"),
+                    click: async () => {
+                        if (!nextMusicDirectory) return;
+                        await shell.openPath(
+                            path.normalize(nextMusicDirectory),
+                        );
+                    },
+                },
+                {
+                    label: t("tray.openAddonsFolder"),
+                    click: async () => {
+                        if (!addonsDirectory) return;
+                        await shell.openPath(path.normalize(addonsDirectory));
+                    },
+                },
+                {
+                    label: t("tray.openLanguageFolder"),
+                    click: async () => {
+                        if (!languagesDirectory) return;
+                        await shell.openPath(
+                            path.normalize(languagesDirectory),
+                        );
+                    },
+                },
+                {
+                    label: t("tray.openConfig"),
+                    click: async () => {
+                        if (!configFilePath) return;
+                        await shell.openPath(path.normalize(configFilePath));
+                    },
+                },
+            ],
         },
         {
             label: t("tray.settings"),
@@ -121,7 +87,7 @@ function buildContextMenu(nextMusicDirectory, addonsDirectory, configFilePath) {
         },
         { type: "separator" },
         {
-            label: t("tray.downloadExtensions"),
+            label: t("tray.extensionRepository"),
             click: () =>
                 shell.openExternal(
                     "https://github.com/Web-Next-Music/Next-Music-Extensions",
@@ -130,11 +96,6 @@ function buildContextMenu(nextMusicDirectory, addonsDirectory, configFilePath) {
         {
             label: t("tray.donate"),
             click: () => shell.openExternal("https://boosty.to/diramix"),
-        },
-        { type: "separator" },
-        {
-            label: t("tray.language"),
-            submenu: languageSubmenu,
         },
         { type: "separator" },
         {
@@ -169,7 +130,6 @@ function rebuildTrayMenu(nextMusicDirectory, addonsDirectory, configFilePath) {
     );
 }
 
-// Создание трея
 function createTray(
     iconPath,
     mainWindow,
@@ -196,7 +156,6 @@ function createTray(
     });
 }
 
-// info
 function selInfoVer() {
     if (config?.labs?.nm_info_v2 == false) {
         createInfoWindow();

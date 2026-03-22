@@ -2,10 +2,12 @@
     "tray": {
         "appTitle": "💖 Next Music {version} ⚡",
         "settings": "Настройки",
+        "openFolders": "Открыть",
         "openMusicFolder": "Открыть папку Next Music",
         "openAddonsFolder": "Открыть папку аддонов",
+        "openLanguageFolder": "Открыть папку языков",
         "openConfig": "Открыть конфиг",
-        "downloadExtensions": "Скачать расширения",
+        "extensionRepository": "Репо расширений",
         "donate": "Донат",
         "info": "О программе",
         "checkUpdates": "Проверить обновления",
