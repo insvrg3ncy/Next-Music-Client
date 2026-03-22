@@ -5,9 +5,9 @@ Web client for Yandex Music with support for themes, addons and Discord Rich Pre
 
 ## Features
 <details>
-  <summary>Themes & addons. repo - https://github.com/Web-Next-Music/Next-Music-Extensions</summary>
+  <summary>Themes & addons</summary>
   
-  <img width="1918" height="1078" alt="image" src="https://github.com/user-attachments/assets/dfb7bff5-7c7d-4974-ad53-637b6120ff30" />
+  <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/3b36ee6a-22a7-4beb-83ca-7411a0fdb619" />
 </details>
 
 <details>
@@ -23,7 +23,7 @@ Web client for Yandex Music with support for themes, addons and Discord Rich Pre
 <details>
   <summary>OBS widget</summary>
   
-  > It can be enabled in the config. It opens at `localhost:4091`
+  > It can be enabled in the settings. It opens at `localhost:4091`
   
   <img width="757" height="623" alt="image" src="https://github.com/user-attachments/assets/f11c325d-4bc1-4544-ad8e-7e0e923e2dfd" />
 
@@ -33,9 +33,9 @@ Web client for Yandex Music with support for themes, addons and Discord Rich Pre
 <details>
   <summary>Listen Along (Experimental)</summary>
   
-  > It can be enabled in the config.
-  
-  <img width="465" height="276" alt="image" src="https://github.com/user-attachments/assets/1aef6562-6f0b-42f6-9113-0b7113d3d9b5" />
+  > It can be enabled in the settings.
+
+  <img width="629" height="458" alt="image" src="https://github.com/user-attachments/assets/c90e9bbe-7e77-4f58-804b-2bfc743321e1" />
 
   <img width="301" height="148" alt="image_2026-02-25_11-42-33" src="https://github.com/user-attachments/assets/8a62ac93-c270-47a4-9b4a-1be81aebd7ba" />
 
@@ -57,8 +57,8 @@ paru -S next-music
 ### Other Linux
 Download the package from the [releases page](https://github.com/Web-Next-Music/Next-Music-Client/releases/latest).
 
-## To change the program settings, open the config using the button in the system tray.
-<img width="312" height="247" alt="image" src="https://github.com/user-attachments/assets/b8ac49cd-eb46-4b65-a3fd-828f7538b963" />
+## To change the program settings, open the program settings in tray lol.
+<img width="810" height="545" alt="image" src="https://github.com/user-attachments/assets/b11378f5-0bd1-4d20-93fc-dc98e166cade" />
 
 ## Recomended Scripts
 ### [Yandex Music Downloader](https://greasyfork.org/en/scripts/558745-yandex-music-downloader)
