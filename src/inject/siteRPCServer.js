@@ -166,8 +166,14 @@
 
     /* ===================== OBSERVER ===================== */
 
-    const players = document.querySelectorAll(`[class*="PlayerBar_root"]`);
-    players.forEach((playerEl, index) => {
+    // Карта активных наблюдателей: el -> { observer, index }
+    const activeObservers = new Map();
+    let playerCounter = 0;
+
+    function attachObserver(playerEl) {
+        if (activeObservers.has(playerEl)) return; // уже наблюдается
+
+        const index = playerCounter++;
         log(index, "👀 Player observer initialized");
 
         const playerObserve = new MutationObserver(() =>
@@ -178,6 +184,7 @@
             subtree: true,
             characterData: true,
         });
+        activeObservers.set(playerEl, { observer: playerObserve, index });
 
         const slider = playerEl.querySelector(
             '[class*="PlayerBarDesktopWithBackgroundProgressBar_slider"]',
@@ -187,5 +194,69 @@
             slider.addEventListener("mouseup", trigger);
             slider.addEventListener("touchend", trigger);
         }
+    }
+
+    function detachObserver(playerEl) {
+        const entry = activeObservers.get(playerEl);
+        if (!entry) return;
+
+        const { observer, index } = entry;
+        log(index, "🗑️ Player removed from DOM, sending null state");
+
+        // Уведомляем сервер, что плеер пропал
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            const payload = {
+                playerIndex: index,
+                playerState: null,
+                removed: true,
+            };
+            ws.send(JSON.stringify(payload));
+        } else {
+            // Если WS не готов — ставим в pending
+            pendingData.set(index, { playerState: null, removed: true });
+        }
+
+        observer.disconnect();
+        activeObservers.delete(playerEl);
+        lastSentState.delete(index);
+        lastTimeCurrent.delete(index);
+        pendingData.delete(index);
+
+        const timer = cooldownTimers.get(index);
+        if (timer) {
+            clearTimeout(timer);
+            cooldownTimers.delete(index);
+        }
+    }
+
+    // Первоначальная инициализация уже существующих плееров
+    document
+        .querySelectorAll(`[class*="PlayerBar_root"]`)
+        .forEach(attachObserver);
+
+    // Глобальный наблюдатель за появлением/исчезновением плееров в DOM
+    const domObserver = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+            for (const node of mutation.addedNodes) {
+                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                if (node.matches?.(`[class*="PlayerBar_root"]`)) {
+                    attachObserver(node);
+                }
+                node.querySelectorAll?.(`[class*="PlayerBar_root"]`).forEach(
+                    attachObserver,
+                );
+            }
+            for (const node of mutation.removedNodes) {
+                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                if (node.matches?.(`[class*="PlayerBar_root"]`)) {
+                    detachObserver(node);
+                }
+                node.querySelectorAll?.(`[class*="PlayerBar_root"]`).forEach(
+                    detachObserver,
+                );
+            }
+        }
     });
+
+    domObserver.observe(document.body, { childList: true, subtree: true });
 })();
