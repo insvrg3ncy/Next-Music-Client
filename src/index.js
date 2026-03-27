@@ -1,5 +1,8 @@
 const { app, BrowserWindow, protocol } = require("electron");
 
+// App name
+app.setName("next-music");
+
 // Config
 const { loadConfig } = require("./config");
 const { appIcon, getPaths } = require("./config.js");

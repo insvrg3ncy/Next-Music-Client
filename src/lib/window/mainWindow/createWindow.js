@@ -6,6 +6,9 @@ const injector = require("../../injector.js");
 const path = require("path");
 const fs = require("fs");
 
+// Version
+const { version: currentPkgVersion } = require("../../../../package.json");
+
 const titlebarFolder = path.resolve(__dirname, "..", "..", "titlebar");
 const apiFile = path.resolve(__dirname, "..", "..", "api.js");
 
@@ -131,7 +134,7 @@ function createWindow(config) {
         );
         const titleBarConfig = {
             showNextText: config.windowSettings?.titleBar?.nextText === true,
-            version: app.getVersion(),
+            version: currentPkgVersion,
         };
         mainWindow.webContents
             .executeJavaScript(

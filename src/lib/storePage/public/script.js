@@ -1169,3 +1169,23 @@ Promise.all([
     }
     loadCustom();
 });
+
+// Expose to window
+window.switchTab = switchTab;
+window.onSearch = onSearch;
+
+window.closeModal = closeModal;
+window.closeEditorModal = closeEditorModal;
+window.saveHandleEvents = saveHandleEvents;
+
+window.openReadme = openReadme;
+window.openInBrowser = openInBrowser;
+
+window.doDownload = doDownload;
+window.doUpdate = doUpdate;
+window.doToggle = doToggle;
+window.doDelete = doDelete;
+
+window.openHandleEvents = openHandleEvents;
+
+window.doReload = doReload;
