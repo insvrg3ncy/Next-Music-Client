@@ -187,17 +187,47 @@ function startAssetServer() {
                 return res.end("Missing name");
             }
 
-            // Ищем реальный путь к папке аддона по имени
             const addonDir = ADDON_DIRS.get(name);
             if (!addonDir) {
                 res.writeHead(404);
                 return res.end("Addon not found");
             }
 
-            const handleFile = path.join(addonDir, "handleEvents.json");
+            function findHandleFile(dir) {
+                if (!fs.existsSync(dir)) return null;
+                const entries = fs.readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                    const fullPath = path.join(dir, entry.name);
+                    try {
+                        const stat = fs.statSync(fullPath);
+                        if (stat.isDirectory()) {
+                            if (entry.name === "assets") {
+                                // handleEvents.json должен лежать рядом с папкой assets
+                                const candidate = path.join(
+                                    dir,
+                                    "handleEvents.json",
+                                );
+                                if (fs.existsSync(candidate)) return candidate;
+                            }
+                            const found = findHandleFile(fullPath);
+                            if (found) return found;
+                        }
+                    } catch {
+                        continue;
+                    }
+                }
+                // Запасной вариант — корень текущей директории
+                const fallback = path.join(dir, "handleEvents.json");
+                return fs.existsSync(fallback) ? fallback : null;
+            }
 
-            if (!fs.existsSync(handleFile)) {
-                console.error("[get_handle] File not found:", handleFile);
+            const handleFile = findHandleFile(addonDir);
+
+            if (!handleFile) {
+                console.error(
+                    "[get_handle] File not found in addon:",
+                    addonDir,
+                );
                 res.writeHead(404);
                 return res.end("handleEvents.json not found");
             }
