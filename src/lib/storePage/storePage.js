@@ -25,8 +25,7 @@ if (!fs.existsSync(addonsDirectory))
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 
-// ─── GitHub network ───────────────────────────────────────────────────────────
-
+// GitHub network
 function httpsGet(url, headers = {}, timeout = 15000) {
     return new Promise((resolve, reject) => {
         const req = https.get(
@@ -287,8 +286,7 @@ async function getFolderMeta(f) {
     }
 }
 
-// ─── Submodule commit helpers ─────────────────────────────────────────────────
-
+// Submodule commit helpers
 async function getRemoteHeadCommit(owner, repo) {
     try {
         const r = await httpsGet(
@@ -347,8 +345,151 @@ function getLocalCommitHash(addonName) {
     }
 }
 
-// ─── FS helpers ───────────────────────────────────────────────────────────────
+// Release-based install helpers
+/**
+ * Returns { tag, downloadUrl } if the latest GitHub release for owner/repo
+ * contains an asset whose name ends with "nm.zip", otherwise returns null.
+ */
+async function getLatestNmRelease(owner, repo) {
+    try {
+        const r = await httpsGet(
+            `https://api.github.com/repos/${owner}/${repo}/releases/latest`,
+        );
+        if (r.statusCode !== 200) return null;
+        const release = JSON.parse(r.body.toString());
+        const asset =
+            release.assets &&
+            release.assets.find((a) => a.name.endsWith("nm.zip"));
+        if (!asset) return null;
+        return {
+            tag: release.tag_name,
+            downloadUrl: asset.browser_download_url,
+        };
+    } catch {
+        return null;
+    }
+}
 
+/**
+ * Downloads a zip from url and extracts its contents into destDir.
+ * Uses only Node built-ins (no extra npm deps).
+ */
+async function downloadAndExtractZip(url, destDir) {
+    const r = await httpsGet(url, {}, 60000);
+    if (r.statusCode !== 200)
+        throw new Error(`Failed to download zip: HTTP ${r.statusCode}`);
+
+    const zipBuf = r.body;
+
+    // Parse ZIP end-of-central-directory record
+    function findEOCD(buf) {
+        for (let i = buf.length - 22; i >= 0; i--) {
+            if (
+                buf[i] === 0x50 &&
+                buf[i + 1] === 0x4b &&
+                buf[i + 2] === 0x05 &&
+                buf[i + 3] === 0x06
+            )
+                return i;
+        }
+        return -1;
+    }
+
+    const eocdOffset = findEOCD(zipBuf);
+    if (eocdOffset === -1) throw new Error("Invalid ZIP: EOCD not found");
+
+    const cdOffset = zipBuf.readUInt32LE(eocdOffset + 16);
+    const cdSize = zipBuf.readUInt32LE(eocdOffset + 12);
+    const totalEntries = zipBuf.readUInt16LE(eocdOffset + 10);
+
+    // Detect a single top-level directory (strip it like `unzip -j` alternative)
+    const topDirs = new Set();
+    let pos = cdOffset;
+    for (let e = 0; e < totalEntries; e++) {
+        if (zipBuf.readUInt32LE(pos) !== 0x02014b50) break;
+        const fnLen = zipBuf.readUInt16LE(pos + 28);
+        const extraLen = zipBuf.readUInt16LE(pos + 30);
+        const commentLen = zipBuf.readUInt16LE(pos + 32);
+        const name = zipBuf.toString("utf8", pos + 46, pos + 46 + fnLen);
+        const topPart = name.split("/")[0];
+        if (topPart) topDirs.add(topPart);
+        pos += 46 + fnLen + extraLen + commentLen;
+    }
+    const stripPrefix = topDirs.size === 1 ? [...topDirs][0] + "/" : "";
+
+    // Extract local file entries
+    pos = cdOffset;
+    for (let e = 0; e < totalEntries; e++) {
+        if (zipBuf.readUInt32LE(pos) !== 0x02014b50) break;
+        const fnLen = zipBuf.readUInt16LE(pos + 28);
+        const extraLen = zipBuf.readUInt16LE(pos + 30);
+        const commentLen = zipBuf.readUInt16LE(pos + 32);
+        const localOffset = zipBuf.readUInt32LE(pos + 42);
+        const name = zipBuf.toString("utf8", pos + 46, pos + 46 + fnLen);
+        pos += 46 + fnLen + extraLen + commentLen;
+
+        // Strip common top-level dir
+        const relName =
+            stripPrefix && name.startsWith(stripPrefix)
+                ? name.slice(stripPrefix.length)
+                : name;
+
+        if (!relName || relName.endsWith("/")) continue; // directory entry
+
+        // Read local file header to get actual data offset
+        const lhExtraLen = zipBuf.readUInt16LE(localOffset + 28);
+        const lhFnLen = zipBuf.readUInt16LE(localOffset + 26);
+        const dataOffset = localOffset + 30 + lhFnLen + lhExtraLen;
+
+        const compMethod = zipBuf.readUInt16LE(localOffset + 8);
+        const compSize = zipBuf.readUInt32LE(localOffset + 18);
+        const uncompSize = zipBuf.readUInt32LE(localOffset + 22);
+
+        const compData = zipBuf.slice(dataOffset, dataOffset + compSize);
+
+        let fileData;
+        if (compMethod === 0) {
+            // Stored (no compression)
+            fileData = compData;
+        } else if (compMethod === 8) {
+            // Deflate
+            const { inflateRawSync } = await import("zlib");
+            fileData = inflateRawSync(compData);
+        } else {
+            throw new Error(
+                `Unsupported ZIP compression method: ${compMethod}`,
+            );
+        }
+
+        const outPath = path.join(destDir, ...relName.split("/"));
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, fileData);
+    }
+}
+
+/**
+ * Returns the locally saved release tag for an addon (written during install).
+ */
+function getLocalReleaseTag(addonName) {
+    try {
+        const raw =
+            fs
+                .readdirSync(addonsDirectory)
+                .find(
+                    (n) =>
+                        n.replace(/^!/, "").toLowerCase() ===
+                        addonName.toLowerCase(),
+                ) || addonName;
+        const tagFile = path.join(addonsDirectory, raw, ".git-release");
+        if (fs.existsSync(tagFile))
+            return fs.readFileSync(tagFile, "utf8").trim();
+        return null;
+    } catch {
+        return null;
+    }
+}
+
+// FS helpers
 function installedEntries() {
     try {
         return fs.readdirSync(addonsDirectory).map((n) => ({
@@ -466,8 +607,7 @@ function getCustomEntries(knownNames) {
     }
 }
 
-// ─── Skeleton helper ──────────────────────────────────────────────────────────
-
+// Skeleton helper
 function SKELS(n) {
     return Array.from(
         { length: n },
@@ -485,8 +625,7 @@ function SKELS(n) {
     ).join("");
 }
 
-// ─── README cache ─────────────────────────────────────────────────────────────
-
+// README cache
 const readmeCache = new Map();
 
 async function fetchReadme(url) {
@@ -497,8 +636,7 @@ async function fetchReadme(url) {
     return md;
 }
 
-// ─── Static MIME types ────────────────────────────────────────────────────────
-
+// Static MIME types
 const MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css",
@@ -514,8 +652,7 @@ const IMG_MIME = {
     ".svg": "image/svg+xml",
 };
 
-// ─── Request handler (shared logic, replaces HTTP server) ─────────────────────
-
+// Request handler (shared logic, replaces HTTP server)
 async function handleRequest(method, urlPath, qp, getBody) {
     const json = (d, status = 200) => ({
         status,
@@ -666,18 +803,36 @@ async function handleRequest(method, urlPath, qp, getBody) {
                     );
                 if (!m)
                     throw new Error("Cannot parse submodule URL: " + subUrl);
-                const subGm = await loadGitmodules(m[1], m[2]);
-                await downloadTree("", dest, m[1], m[2], subGm);
-                try {
-                    const sha = await getRemoteHeadCommit(m[1], m[2]);
-                    if (sha)
-                        fs.writeFileSync(
-                            path.join(dest, ".git-commit"),
-                            sha,
-                            "utf8",
+                const [, subOwner, subRepo] = m;
+
+                // Prefer nm.zip release asset if one exists
+                const nmRelease = await getLatestNmRelease(subOwner, subRepo);
+                if (nmRelease) {
+                    fs.mkdirSync(dest, { recursive: true });
+                    await downloadAndExtractZip(nmRelease.downloadUrl, dest);
+                    // Save release tag so update checks compare tags, not commits
+                    fs.writeFileSync(
+                        path.join(dest, ".git-release"),
+                        nmRelease.tag,
+                        "utf8",
+                    );
+                } else {
+                    const subGm = await loadGitmodules(subOwner, subRepo);
+                    await downloadTree("", dest, subOwner, subRepo, subGm);
+                    try {
+                        const sha = await getRemoteHeadCommit(
+                            subOwner,
+                            subRepo,
                         );
-                } catch {
-                    // non-critical
+                        if (sha)
+                            fs.writeFileSync(
+                                path.join(dest, ".git-commit"),
+                                sha,
+                                "utf8",
+                            );
+                    } catch {
+                        // non-critical
+                    }
                 }
             } else {
                 const gm = await loadGitmodules(GITHUB_OWNER, GITHUB_REPO);
@@ -708,6 +863,21 @@ async function handleRequest(method, urlPath, qp, getBody) {
                 );
             if (!m) return json({ hasUpdate: false });
             const [, owner, repo] = m;
+
+            // If installed via nm.zip release — compare tags, not commits
+            const localTag = getLocalReleaseTag(name);
+            if (localTag) {
+                const nmRelease = await getLatestNmRelease(owner, repo);
+                if (!nmRelease) return json({ hasUpdate: false });
+                const hasUpdate = nmRelease.tag !== localTag;
+                return json({
+                    hasUpdate,
+                    remoteHash: nmRelease.tag,
+                    localHash: localTag,
+                });
+            }
+
+            // Fallback: commit-based comparison
             const [remoteHash, localHash] = await Promise.all([
                 getRemoteHeadCommit(owner, repo),
                 Promise.resolve(getLocalCommitHash(name)),
@@ -968,8 +1138,7 @@ async function handleRequest(method, urlPath, qp, getBody) {
     return notFound();
 }
 
-// ─── Electron protocol handler ────────────────────────────────────────────────
-
+// Electron protocol handler
 function setupStorePage() {
     protocol.handle("nextstore", async (request) => {
         const url = new URL(request.url);
@@ -997,8 +1166,7 @@ function setupStorePage() {
     });
 }
 
-// ─── HTML injection ───────────────────────────────────────────────────────────
-
+// HTML injection
 function getStoreHtml() {
     const htmlPath = path.join(PUBLIC_DIR, "index.html");
     let html = fs.readFileSync(htmlPath, "utf8");
